@@ -23,6 +23,9 @@ DIRS = [os.path.join(MAIN_DIR, subdir) for subdir in DIRS]
 
 MODEL_IMAGE_HEIGHT = 128
 MODEL_IMAGE_WIDTH = 128
+EPOCHS = 50
+SAVE_WEIGHTS_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator80x80.weights")
+SAVE_WEIGHTS_CHECKPOINT_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator80x80.best.weights")
 
 def main():
     """Main method that reads the images, trains a model, then saves weights and predictions."""
@@ -39,10 +42,18 @@ def main():
     # split train and val
     
     # create model
+    print("Creating model...")
+    model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, Adam())
     
     # fit
+    checkpoint_cb = ModelCheckpoint(SAVE_WEIGHTS_CHECKPOINT_FILEPATH, verbose=1, save_best_only=True)
+    model.fit(X_train, Y_train, batch_size=128, nb_epoch=EPOCHS, validation_split=0.0,
+              validation_data=(X_val, Y_val), show_accuracy=False,
+              callbacks=[checkpoint_cb])
     
     # save weights
+    print("Saving weights...")
+    model.save_weights(SAVE_WEIGHTS_FILEPATH, overwrite=SAVE_AUTO_OVERWRITE)
     
     # save predictions on val set
 
