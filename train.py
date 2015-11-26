@@ -17,15 +17,13 @@ from keras.layers.noise import GaussianNoise
 from keras.callbacks import ModelCheckpoint
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
-MAIN_DIR = "/media/aj/grab/ml/datasets/10k_cats"
-DIRS = ["CAT_00", "CAT_01", "CAT_02", "CAT_03", "CAT_04", "CAT_05", "CAT_06"]
-DIRS = [os.path.join(MAIN_DIR, subdir) for subdir in DIRS]
 
 MODEL_IMAGE_HEIGHT = 128
 MODEL_IMAGE_WIDTH = 128
 EPOCHS = 50
 SAVE_WEIGHTS_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator80x80.weights")
 SAVE_WEIGHTS_CHECKPOINT_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator80x80.best.weights")
+AUGMENTATIONS = 5
 
 def main():
     """Main method that reads the images, trains a model, then saves weights and predictions."""
@@ -33,9 +31,35 @@ def main():
     parser.add_argument("--path", required=True, help="Path to your 10k cats dataset directory")
     args = parser.parse_args()
     
+    subdir_names = ["CAT_00", "CAT_01", "CAT_02", "CAT_03", "CAT_04", "CAT_05", "CAT_06"]
+    subdirs = [os.path.join(args.path, subdir) for subdir in subdir_names]
+    
     # initialize dataset
+    dataset = Dataset(subdirs)
     
     # load images
+    i = 0
+    nb_images = len(dataset.fps) + len(dataset.fps) * AUGMENTATIONS
+    X = np.zeros((nb_images, 3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH), dtype=np.float32)
+    y = np.zeros((nb_images, 4), dtype=np.float32)
+    for image in dataset.get_images():
+        image.pad(PADDING) # todo
+        augs = image.augment(AUGMENTATIONS, hflip=True, vflip=False, scale_to_percent=(0.9, 1.1), scale_axis_equally=False,
+                             rotation_deg=10, shear_deg=0, translation_x_px=5, translation_y_px=5,
+                             brightness_change=0.1, noise_mean=0.0, noise_std=0.05))
+        
+        for aug in [image] + augs:
+            aug.unpad(PADDING)
+            aug.resize(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)
+            X[i] = aug.to_array() / 255.0
+            
+            face_rect = aug.keypoints.get_rectangle()
+            face_rect.normalize(aug) # todo in dataset.py auf image object umstellen
+            center = face_rect.get_center()
+            width = face_rect.get_width()
+            height = face_rect.get_height()
+            y[i] = [center.y, center.x, height, width]
+            i += 1
     
     # convert to X, y
     
