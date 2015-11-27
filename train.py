@@ -18,12 +18,15 @@ from keras.callbacks import ModelCheckpoint
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
+SPLIT = 0.1
 MODEL_IMAGE_HEIGHT = 128
 MODEL_IMAGE_WIDTH = 128
 EPOCHS = 50
 SAVE_WEIGHTS_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator80x80.weights")
 SAVE_WEIGHTS_CHECKPOINT_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator80x80.best.weights")
 AUGMENTATIONS = 5
+SAVE_PREDICTIONS = True
+SAVE_PREDICTIONS_DIR = os.path.join(CURRENT_DIR, "predictions")
 
 def main():
     """Main method that reads the images, trains a model, then saves weights and predictions."""
@@ -61,9 +64,13 @@ def main():
             y[i] = [center.y, center.x, height, width]
             i += 1
     
-    # convert to X, y
-    
     # split train and val
+    nb_train = int(nb_images * (1 - SPLIT))
+    nb_val = nb_images - nb_train
+    X_train = X[0:nb_train, ...]
+    y_train = y[0:nb_train, ...]
+    X_val = X[nb_train:, ...]
+    y_val = y[nb_train:, ...]
     
     # create model
     print("Creating model...")
@@ -80,7 +87,20 @@ def main():
     model.save_weights(SAVE_WEIGHTS_FILEPATH, overwrite=SAVE_AUTO_OVERWRITE)
     
     # save predictions on val set
-
+    if SAVE_PREDICTIONS:
+        print("Saving example predictions...")
+        y_preds = predict_on_images(model, X_val)
+        for img_idx, (y, x, half_height, half_width) in enumerate(y_preds):
+            image_arr = np.copy(X_val[img_idx, ...]) * 255
+            image_arr = np.rollaxis(image, 0, 3)
+            keypoints = np.zeros((9*2,), dtype=np.uint16)
+            image = ImageWithKeypoints(image_arr, Keypoints(keypoints))
+            tl_y = y - half_height
+            tl_x = x - half_width
+            br_y = y + half_height
+            br_x = x + half_width
+            image.draw_rectangle(Rectangle(tl_y=tl_y, tl_y=tl_y, br_y=br_y, br_x=br_x))
+            misc.imsave(os.path.join(SAVE_EXAMPLES_DIR, "%d.png" % (img_idx,)), np.squeeze(image.to_array()))
 
 def create_model_tiny(image_height, image_width, optimizer):
     """Creates the tiny version of the cat face locator model.
