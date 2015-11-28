@@ -40,7 +40,41 @@ def main():
     # initialize dataset
     dataset = Dataset(subdirs)
     
-    # load images
+    # load images and labels
+    X, y = load_Xy()
+    
+    # split train and val
+    nb_train = int(nb_images * (1 - SPLIT))
+    nb_val = nb_images - nb_train
+    X_train = X[0:nb_train, ...]
+    y_train = y[0:nb_train, ...]
+    X_val = X[nb_train:, ...]
+    y_val = y[nb_train:, ...]
+    
+    # create model
+    print("Creating model...")
+    model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
+    
+    # fit
+    checkpoint_cb = ModelCheckpoint(SAVE_WEIGHTS_CHECKPOINT_FILEPATH, verbose=1, save_best_only=True)
+    model.fit(X_train, Y_train, batch_size=128, nb_epoch=EPOCHS, validation_split=0.0,
+              validation_data=(X_val, Y_val), show_accuracy=False,
+              callbacks=[checkpoint_cb])
+    
+    # save weights
+    print("Saving weights...")
+    model.save_weights(SAVE_WEIGHTS_FILEPATH, overwrite=SAVE_AUTO_OVERWRITE)
+    
+    # save predictions on val set
+    if SAVE_PREDICTIONS:
+        print("Saving example predictions...")
+        y_preds = predict_on_images(model, X_val)
+        for img_idx, (y, x, half_height, half_width) in enumerate(y_preds):
+            img_arr = draw_predicted_rectangle(X_val[img_idx], y, x, half_height, half_width)
+            filepath = os.path.join(SAVE_EXAMPLES_DIR, "%d.png" % (img_idx,))
+            misc.imsave(filepath, np.squeeze(img_arr))
+
+def load_Xy():
     i = 0
     nb_images = len(dataset.fps) + len(dataset.fps) * AUGMENTATIONS
     X = np.zeros((nb_images, 3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH), dtype=np.float32)
@@ -64,45 +98,21 @@ def main():
             y[i] = [center.y, center.x, height, width]
             i += 1
     
-    # split train and val
-    nb_train = int(nb_images * (1 - SPLIT))
-    nb_val = nb_images - nb_train
-    X_train = X[0:nb_train, ...]
-    y_train = y[0:nb_train, ...]
-    X_val = X[nb_train:, ...]
-    y_val = y[nb_train:, ...]
-    
-    # create model
-    print("Creating model...")
-    model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, Adam())
-    
-    # fit
-    checkpoint_cb = ModelCheckpoint(SAVE_WEIGHTS_CHECKPOINT_FILEPATH, verbose=1, save_best_only=True)
-    model.fit(X_train, Y_train, batch_size=128, nb_epoch=EPOCHS, validation_split=0.0,
-              validation_data=(X_val, Y_val), show_accuracy=False,
-              callbacks=[checkpoint_cb])
-    
-    # save weights
-    print("Saving weights...")
-    model.save_weights(SAVE_WEIGHTS_FILEPATH, overwrite=SAVE_AUTO_OVERWRITE)
-    
-    # save predictions on val set
-    if SAVE_PREDICTIONS:
-        print("Saving example predictions...")
-        y_preds = predict_on_images(model, X_val)
-        for img_idx, (y, x, half_height, half_width) in enumerate(y_preds):
-            image_arr = np.copy(X_val[img_idx, ...]) * 255
-            image_arr = np.rollaxis(image, 0, 3)
-            keypoints = np.zeros((9*2,), dtype=np.uint16)
-            image = ImageWithKeypoints(image_arr, Keypoints(keypoints))
-            tl_y = y - half_height
-            tl_x = x - half_width
-            br_y = y + half_height
-            br_x = x + half_width
-            image.draw_rectangle(Rectangle(tl_y=tl_y, tl_y=tl_y, br_y=br_y, br_x=br_x))
-            misc.imsave(os.path.join(SAVE_EXAMPLES_DIR, "%d.png" % (img_idx,)), np.squeeze(image.to_array()))
+    return X, y
 
-def create_model_tiny(image_height, image_width, optimizer):
+def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
+    image_arr = np.copy(image_arr) * 255
+    image_arr = np.rollaxis(image_arr, 0, 3)
+    keypoints = np.zeros((9*2,), dtype=np.uint16) # dummy keypoints
+    image = ImageWithKeypoints(image_arr, Keypoints(keypoints))
+    tl_y = y - half_height
+    tl_x = x - half_width
+    br_y = y + half_height
+    br_x = x + half_width
+    image.draw_rectangle(Rectangle(tl_y=tl_y, tl_y=tl_y, br_y=br_y, br_x=br_x))
+    return image.to_array()
+
+def create_model_tiny(image_height, image_width, loss, optimizer):
     """Creates the tiny version of the cat face locator model.
     This is useful for debugging, because it doesn't take as much theano compile time.
     
@@ -150,10 +160,10 @@ def create_model_tiny(image_height, image_width, optimizer):
     model.add(Activation("sigmoid"))
     
     print("Compiling...")
-    model.compile(loss="mse", optimizer=optimizer)
+    model.compile(loss=loss, optimizer=optimizer)
     return model
 
-def create_model(image_height, image_width, optimizer):
+def create_model(image_height, image_width, loss, optimizer):
     """Creates the cat face locator model.
     
     Args:
@@ -166,27 +176,33 @@ def create_model(image_height, image_width, optimizer):
     
     model = Sequential()
     
-     # Tensor size at this point (if 64x64 input): 3x128x128
+     # Tensor size at this point (if 128x128 input): 3x128x128
     model.add(Convolution2D(32, 1 if GRAYSCALE else 3, 3, 3, border_mode="same"))
+    model.add(BatchNormalization())
     model.add(LeakyReLU(0.33))
     model.add(Convolution2D(32, 32, 3, 3, border_mode="same"))
+    model.add(BatchNormalization())
     model.add(LeakyReLU(0.33))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
     
     # Tensor size (...): 32x64x64
     model.add(Convolution2D(64, 32, 3, 3, border_mode="valid"))
+    model.add(BatchNormalization())
     model.add(LeakyReLU(0.33))
     model.add(Convolution2D(64, 64, 3, 3, border_mode="valid"))
+    model.add(BatchNormalization())
     model.add(LeakyReLU(0.33))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
     
     # Tensor size (...): 64x30x30
     model.add(Convolution2D(128, 64, 3, 3, border_mode="valid"))
+    model.add(BatchNormalization())
     model.add(LeakyReLU(0.33))
     model.add(Dropout(0.5))
     model.add(Convolution2D(128, 128, 3, 3, border_mode="valid"))
+    model.add(BatchNormalization())
     model.add(LeakyReLU(0.33))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
@@ -234,7 +250,7 @@ def create_model(image_height, image_width, optimizer):
     
     # compile with mean squared error
     print("Compiling...")
-    model.compile(loss="mse", optimizer=optimizer)
+    model.compile(loss=loss, optimizer=optimizer)
     
     return model
 
