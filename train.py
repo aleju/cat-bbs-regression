@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+"""
+Trains a model to locate cat faces in images (assumes that the image contains a cat face).
+"""
 from __future__ import absolute_import, division, print_function, unicode_literals
 from dataset import Dataset
 import numpy as np
@@ -41,7 +44,7 @@ def main():
     dataset = Dataset(subdirs)
     
     # load images and labels
-    X, y = load_Xy()
+    X, y = load_Xy(dataset, AUGMENTATIONS)
     
     # split train and val
     nb_train = int(nb_images * (1 - SPLIT))
@@ -74,9 +77,21 @@ def main():
             filepath = os.path.join(SAVE_EXAMPLES_DIR, "%d.png" % (img_idx,))
             misc.imsave(filepath, np.squeeze(img_arr))
 
-def load_Xy():
+def load_Xy(dataset, nb_augmentations):
+    """Loads X and y (examples with labels) for the dataset.
+    Examples are images.
+    Labels are the coordinates of the face rectangles with their half-heights and half-widths
+    (each normalized to 0-1 with respect to the image dimensions.)
+    
+    Args:
+        dataset            The Dataset object.
+        nb_augmentations   Number of augmentations to perform.
+    Returns:
+        X (numpy array of shape (N, 3, height, width)),
+        y (numpy array of shape (N, 4))
+    """
     i = 0
-    nb_images = len(dataset.fps) + len(dataset.fps) * AUGMENTATIONS
+    nb_images = len(dataset.fps) + len(dataset.fps) * nb_augmentations
     X = np.zeros((nb_images, 3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH), dtype=np.float32)
     y = np.zeros((nb_images, 4), dtype=np.float32)
     for image in dataset.get_images():
@@ -101,15 +116,27 @@ def load_Xy():
     return X, y
 
 def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
+    """Draws a (face) rectangle onto the image at the provided coordinates.
+    Args:
+        image_arr   Numpy array of the image.
+        y           y-coordinate of the rectangle (normalized to 0-1).
+        x           x-coordinate of the rectangle (normalized to 0-1).
+        half_height Half of the height of the rectangle (normalized to 0-1).
+        half_width  Half of the width of the rectangle (normalized to 0-1).
+    Returns:
+        Modified image (numpy array)
+    """
+    height = image_arr.shape[2]
+    width = image_arr.shape[3]
     image_arr = np.copy(image_arr) * 255
     image_arr = np.rollaxis(image_arr, 0, 3)
     keypoints = np.zeros((9*2,), dtype=np.uint16) # dummy keypoints
     image = ImageWithKeypoints(image_arr, Keypoints(keypoints))
-    tl_y = y - half_height
-    tl_x = x - half_width
-    br_y = y + half_height
-    br_x = x + half_width
-    image.draw_rectangle(Rectangle(tl_y=tl_y, tl_y=tl_y, br_y=br_y, br_x=br_x))
+    tl_y = (y - half_height) * height
+    tl_x = (x - half_width) * width
+    br_y = (y + half_height) * height
+    br_x = (x + half_width) * width
+    image.draw_rectangle(Rectangle(tl_y=int(tl_y), tl_y=int(tl_y), br_y=int(br_y), br_x=int(br_x)))
     return image.to_array()
 
 def create_model_tiny(image_height, image_width, loss, optimizer):
