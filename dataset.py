@@ -142,12 +142,27 @@ class ImageWithKeypoints(object):
         """Converts the image to grayscale."""
         self.image_arr = color.rgb2gray(self.image_arr)
 
-    def unpad(self, pad):
+    def pad(self, nb_pixels, mode="median"):
+        """Adds in-place N pixels to the sides of the image.
+        Args:
+            nb_pixels   Number of pixels
+            mode        Padding mode for numpy.pad.
+        """
+        nb_top = nb_pixels
+        nb_bottom = nb_pixels
+        nb_left = nb_pixels
+        nb_right = nb_pixels
+        self.image_arr = np.pad(self.image_arr, ((nb_top, nb_bottom), \
+                                                 (nb_left, nb_right), \
+                                                 (0, 0)), \
+                                                 mode=mode)
+
+    def unpad(self, nb_pixels):
         """Removes padding around the image. Updates keypoints accordingly.
-        Args: pad: Number of pixels of padding to remove"""
-        self.image_arr = self.image_arr[pad:self.get_height()-pad, pad:self.get_width()-pad, ...]
-        self.keypoints.shift_y(-pad, self)
-        self.keypoints.shift_x(-pad, self)
+        Args: nb_pixels: Number of pixels of padding to remove"""
+        self.image_arr = self.image_arr[nb_pixels:self.get_height()-nb_pixels, nb_pixels:self.get_width()-nb_pixels, ...]
+        self.keypoints.shift_y(-nb_pixels, self)
+        self.keypoints.shift_x(-nb_pixels, self)
 
     def remove_rotation(self):
         """Removes the image's rotation by aligning its eyeline parallel to the x axis."""
