@@ -768,8 +768,8 @@ class Point2D(object):
         """Normalize the integer pixel values to 0-1 with respect to an image's dimensions.
         Args: image: The image which's dimensions to use."""
         assert not self.is_normalized
-        self.y /= image.shape[0]
-        self.x /= image.shape[1]
+        self.y /= image.get_height()
+        self.x /= image.get_width()
         self.is_normalized = True
 
     def unnormalize(self, image):
@@ -777,8 +777,8 @@ class Point2D(object):
         image's dimensions.
         Args: image: The image which's dimensions to use."""
         assert self.is_normalized
-        self.y *= image.shape[0]
-        self.x *= image.shape[1]
+        self.y *= image.get_height()
+        self.x *= image.get_width()
         self.is_normalized = False
 
     def warp(self, image, matrix):
@@ -928,20 +928,20 @@ class Rectangle(object):
         """Normalize integer pixel values to 0-1 with respect to an image.
         Args: image: Image which's dimensions to use."""
         assert not self.is_normalized
-        self.tl_y /= image.shape[0]
-        self.tl_x /= image.shape[1]
-        self.br_y /= image.shape[0]
-        self.br_x /= image.shape[1]
+        self.tl_y /= image.get_height()
+        self.tl_x /= image.get_width()
+        self.br_y /= image.get_height()
+        self.br_x /= image.get_width()
         self.is_normalized = True
 
     def unnormalize(self, image):
         """Normalize from 0-1 to integer pixel values with respect to an image.
         Args: image: Image which's dimensions to use."""
         assert self.is_normalized
-        self.tl_y *= image.shape[0]
-        self.tl_x *= image.shape[1]
-        self.br_y *= image.shape[0]
-        self.br_x *= image.shape[1]
+        self.tl_y *= image.get_height()
+        self.tl_x *= image.get_width()
+        self.br_y *= image.get_height()
+        self.br_x *= image.get_width()
         self.is_normalized = False
 
     def __str__(self):
