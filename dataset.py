@@ -446,6 +446,7 @@ class Keypoints(object):
         assert not self.is_normalized
         height = image.get_height()
         width = image.get_width()
+        self.keypoints_arr = self.keypoints_arr.astype(np.float32)
         for i in range(0, len(self.keypoints_arr), 2):
             self.keypoints_arr[i] = self.keypoints_arr[i] / height
             self.keypoints_arr[i+1] = self.keypoints_arr[i+1] / width
@@ -462,6 +463,7 @@ class Keypoints(object):
         for i in range(0, len(self.keypoints_arr), 2):
             self.keypoints_arr[i] = self.keypoints_arr[i] * height
             self.keypoints_arr[i+1] = self.keypoints_arr[i+1] * width
+        self.keypoints_arr = self.keypoints_arr.astype(np.uint16)
         self.is_normalized = False
 
     def left_eye(self):
@@ -768,8 +770,8 @@ class Point2D(object):
         """Normalize the integer pixel values to 0-1 with respect to an image's dimensions.
         Args: image: The image which's dimensions to use."""
         assert not self.is_normalized
-        self.y /= image.get_height()
-        self.x /= image.get_width()
+        self.y = self.y / image.get_height() # changes y to float
+        self.x = self.x / image.get_width() # changes x to float
         self.is_normalized = True
 
     def unnormalize(self, image):
@@ -777,8 +779,8 @@ class Point2D(object):
         image's dimensions.
         Args: image: The image which's dimensions to use."""
         assert self.is_normalized
-        self.y *= image.get_height()
-        self.x *= image.get_width()
+        self.y = int(self.y * image.get_height())
+        self.x = int(self.x * image.get_width())
         self.is_normalized = False
 
     def warp(self, image, matrix):

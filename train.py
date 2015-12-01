@@ -6,6 +6,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 from dataset import Dataset
 import numpy as np
 import argparse
+import os
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Reshape, TimeDistributedDense, \
                               RepeatVector, Flatten
@@ -21,13 +22,14 @@ from keras.callbacks import ModelCheckpoint
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
-SPLIT = 0.1
 MODEL_IMAGE_HEIGHT = 128
 MODEL_IMAGE_WIDTH = 128
+PADDING = 20
+AUGMENTATIONS = 5
+SPLIT = 0.1
 EPOCHS = 50
 SAVE_WEIGHTS_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator128x128.weights")
 SAVE_WEIGHTS_CHECKPOINT_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator128x128.best.weights")
-AUGMENTATIONS = 5
 SAVE_PREDICTIONS = True
 SAVE_PREDICTIONS_DIR = os.path.join(CURRENT_DIR, "predictions")
 
@@ -92,26 +94,27 @@ def load_Xy(dataset, nb_augmentations):
     """
     i = 0
     nb_images = len(dataset.fps) + len(dataset.fps) * nb_augmentations
-    X = np.zeros((nb_images, 3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH), dtype=np.float32)
+    X = np.zeros((nb_images, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, 3), dtype=np.float32)
     y = np.zeros((nb_images, 4), dtype=np.float32)
     for image in dataset.get_images():
         image.pad(PADDING)
         augs = image.augment(AUGMENTATIONS, hflip=True, vflip=False, scale_to_percent=(0.9, 1.1), scale_axis_equally=False,
                              rotation_deg=10, shear_deg=0, translation_x_px=5, translation_y_px=5,
-                             brightness_change=0.1, noise_mean=0.0, noise_std=0.05))
-
+                             brightness_change=0.1, noise_mean=0.0, noise_std=0.05)
         for aug in [image] + augs:
             aug.unpad(PADDING)
             aug.resize(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)
             X[i] = aug.to_array() / 255.0
-
-            face_rect = aug.keypoints.get_rectangle()
+            face_rect = aug.keypoints.get_rectangle(aug)
             face_rect.normalize(aug)
             center = face_rect.get_center()
             width = face_rect.get_width()
             height = face_rect.get_height()
             y[i] = [center.y, center.x, height, width]
             i += 1
+
+    X = np.rollaxis(X, 3, 1)
+    print(X.shape)
 
     return X, y
 
@@ -137,7 +140,7 @@ def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
     tl_x = (x - half_width) * width
     br_y = (y + half_height) * height
     br_x = (x + half_width) * width
-    image.draw_rectangle(Rectangle(tl_y=int(tl_y), tl_y=int(tl_y), br_y=int(br_y), br_x=int(br_x)))
+    image.draw_rectangle(Rectangle(tl_y=int(tl_y), tl_x=int(tl_y), br_y=int(br_y), br_x=int(br_x)))
     return image.to_array()
 
 def create_model_tiny(image_height, image_width, loss, optimizer):
