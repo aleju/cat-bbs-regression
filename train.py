@@ -25,7 +25,8 @@ CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 MODEL_IMAGE_HEIGHT = 128
 MODEL_IMAGE_WIDTH = 128
 PADDING = 20
-AUGMENTATIONS = 5
+AUGMENTATIONS = 0
+NB_LOAD_IMAGES = 100
 SPLIT = 0.1
 EPOCHS = 50
 SAVE_WEIGHTS_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator128x128.weights")
@@ -46,9 +47,11 @@ def main():
     dataset = Dataset(subdirs)
 
     # load images and labels
-    X, y = load_Xy(dataset, AUGMENTATIONS)
+    print("Loading images...")
+    X, y = load_Xy(dataset, NB_LOAD_IMAGES, AUGMENTATIONS)
 
     # split train and val
+    nb_images = X.shape[0]
     nb_train = int(nb_images * (1 - SPLIT))
     nb_val = nb_images - nb_train
     X_train = X[0:nb_train, ...]
@@ -58,7 +61,7 @@ def main():
 
     # create model
     print("Creating model...")
-    model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
+    model = create_model_tiny(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
 
     # fit
     checkpoint_cb = ModelCheckpoint(SAVE_WEIGHTS_CHECKPOINT_FILEPATH, verbose=1, save_best_only=True)
@@ -79,7 +82,7 @@ def main():
             filepath = os.path.join(SAVE_EXAMPLES_DIR, "%d.png" % (img_idx,))
             misc.imsave(filepath, np.squeeze(img_arr))
 
-def load_Xy(dataset, nb_augmentations):
+def load_Xy(dataset, nb_load, nb_augmentations):
     """Loads X and y (examples with labels) for the dataset.
     Examples are images.
     Labels are the coordinates of the face rectangles with their half-heights and half-widths
@@ -87,16 +90,20 @@ def load_Xy(dataset, nb_augmentations):
 
     Args:
         dataset            The Dataset object.
+        nb_load            Intended number of images to load.
         nb_augmentations   Number of augmentations to perform.
     Returns:
         X (numpy array of shape (N, 3, height, width)),
         y (numpy array of shape (N, 4))
     """
     i = 0
-    nb_images = len(dataset.fps) + len(dataset.fps) * nb_augmentations
+    nb_load = min(nb_load, len(dataset.fps))
+    nb_images = nb_load + nb_load * nb_augmentations
     X = np.zeros((nb_images, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, 3), dtype=np.float32)
     y = np.zeros((nb_images, 4), dtype=np.float32)
-    for image in dataset.get_images():
+
+    for img_idx, image in enumerate(dataset.get_images()):
+        print("Loading image %d of %d..." % (img_idx+1, nb_load))
         image.pad(PADDING)
         augs = image.augment(AUGMENTATIONS, hflip=True, vflip=False, scale_to_percent=(0.9, 1.1), scale_axis_equally=False,
                              rotation_deg=10, shear_deg=0, translation_x_px=5, translation_y_px=5,
@@ -112,6 +119,9 @@ def load_Xy(dataset, nb_augmentations):
             height = face_rect.get_height()
             y[i] = [center.y, center.x, height, width]
             i += 1
+
+        if (img_idx + 1) >= nb_load:
+            break
 
     X = np.rollaxis(X, 3, 1)
     print(X.shape)
@@ -158,7 +168,7 @@ def create_model_tiny(image_height, image_width, loss, optimizer):
     model = Sequential()
 
      # 3x64x64
-    model.add(Convolution2D(4, 1 if GRAYSCALE else 3, 3, 3, border_mode="valid"))
+    model.add(Convolution2D(4, 3, 3, 3, border_mode="valid"))
     model.add(LeakyReLU(0.33))
     model.add(MaxPooling2D((2, 2)))
     model.add(Convolution2D(4, 4, 3, 3, border_mode="valid"))
@@ -208,7 +218,7 @@ def create_model(image_height, image_width, loss, optimizer):
     model = Sequential()
 
      # Tensor size at this point (if 128x128 input): 3x128x128
-    model.add(Convolution2D(32, 1 if GRAYSCALE else 3, 3, 3, border_mode="same"))
+    model.add(Convolution2D(32, 3, 3, 3, border_mode="same"))
     model.add(BatchNormalization())
     model.add(LeakyReLU(0.33))
     model.add(Convolution2D(32, 32, 3, 3, border_mode="same"))
