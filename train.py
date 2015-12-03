@@ -3,10 +3,11 @@
 Trains a model to locate cat faces in images (assumes that the image contains a cat face).
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
-from dataset import Dataset
+from dataset import Dataset, ImageWithKeypoints, Keypoints, Rectangle
 import numpy as np
 import argparse
 import os
+from scipy import misc
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Reshape, TimeDistributedDense, \
                               RepeatVector, Flatten
@@ -26,9 +27,10 @@ MODEL_IMAGE_HEIGHT = 128
 MODEL_IMAGE_WIDTH = 128
 PADDING = 20
 AUGMENTATIONS = 0
-NB_LOAD_IMAGES = 100
+NB_LOAD_IMAGES = 2
 SPLIT = 0.1
 EPOCHS = 50
+BATCH_SIZE = 64
 SAVE_WEIGHTS_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator128x128.weights")
 SAVE_WEIGHTS_CHECKPOINT_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator128x128.best.weights")
 SAVE_PREDICTIONS = True
@@ -65,8 +67,8 @@ def main():
 
     # fit
     checkpoint_cb = ModelCheckpoint(SAVE_WEIGHTS_CHECKPOINT_FILEPATH, verbose=1, save_best_only=True)
-    model.fit(X_train, Y_train, batch_size=128, nb_epoch=EPOCHS, validation_split=0.0,
-              validation_data=(X_val, Y_val), show_accuracy=False,
+    model.fit(X_train, y_train, batch_size=BATCH_SIZE, nb_epoch=EPOCHS, validation_split=0.0,
+              validation_data=(X_val, y_val), show_accuracy=False,
               callbacks=[checkpoint_cb])
 
     # save weights
@@ -79,7 +81,7 @@ def main():
         y_preds = predict_on_images(model, X_val)
         for img_idx, (y, x, half_height, half_width) in enumerate(y_preds):
             img_arr = draw_predicted_rectangle(X_val[img_idx], y, x, half_height, half_width)
-            filepath = os.path.join(SAVE_EXAMPLES_DIR, "%d.png" % (img_idx,))
+            filepath = os.path.join(SAVE_PREDICTIONS_DIR, "%d.png" % (img_idx,))
             misc.imsave(filepath, np.squeeze(img_arr))
 
 def load_Xy(dataset, nb_load, nb_augmentations):
@@ -128,6 +130,16 @@ def load_Xy(dataset, nb_load, nb_augmentations):
 
     return X, y
 
+def predict_on_images(model, X):
+    """Predicts the coordinates of face rectangles for given images.
+    Args:
+        model: The neural net model.
+        images: Numpy array of images.
+    Returns:
+        List of coordinate-arrays
+    """
+    return model.predict(X, batch_size=BATCH_SIZE)
+
 def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
     """Draws a (face) rectangle onto the image at the provided coordinates.
     Args:
@@ -146,12 +158,57 @@ def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
     image_arr = np.rollaxis(image_arr, 0, 3)
     keypoints = np.zeros((9*2,), dtype=np.uint16) # dummy keypoints
     image = ImageWithKeypoints(image_arr, Keypoints(keypoints))
+
     tl_y = (y - half_height) * height
     tl_x = (x - half_width) * width
     br_y = (y + half_height) * height
     br_x = (x + half_width) * width
+
+    # make sure that x and y coordinates are within image boundaries
+    tl_y = clip(0, tl_y, height-2)
+    tl_x = clip(0, tl_x, width-2)
+    br_y = clip(0, br_y, height-1)
+    br_x = clip(0, br_x, width-1)
+
+    if tl_y > br_y:
+        tl_y, br_y = br_y, tl_y
+    if tl_x > br_x:
+        tl_x, br_x = br_x, tl_x
+
+    # make sure that the area covered is at least 1px,
+    # move preferably the top left corner
+    # but dont move it outside of the image
+    if tl_y == br_y:
+        if tl_y == 0:
+            br_y += 1
+        else:
+            tl_y -= 1
+
+    if tl_x == br_x:
+        if tl_x == 0:
+            br_x += 1
+        else:
+            tl_x -= 1
+
     image.draw_rectangle(Rectangle(tl_y=int(tl_y), tl_x=int(tl_y), br_y=int(br_y), br_x=int(br_x)))
     return image.to_array()
+
+def clip(lower, val, upper):
+    """Clips a value. For lower bound L, upper bound U and value V it
+    makes sure that L <= V <= U holds.
+    Args:
+        lower:  Lower boundary (including)
+        val:    The value to clip
+        upper:  Upper boundary (including)
+    Returns:
+        value within bounds
+    """
+    if val < lower:
+        return lower
+    elif val > upper:
+        return upper
+    else:
+        return val
 
 def create_model_tiny(image_height, image_width, loss, optimizer):
     """Creates the tiny version of the cat face locator model.
@@ -168,15 +225,16 @@ def create_model_tiny(image_height, image_width, loss, optimizer):
     model = Sequential()
 
      # 3x64x64
-    model.add(Convolution2D(4, 3, 3, 3, border_mode="valid"))
+    model.add(Convolution2D(4, 3, 3, border_mode="valid", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
     model.add(LeakyReLU(0.33))
     model.add(MaxPooling2D((2, 2)))
-    model.add(Convolution2D(4, 4, 3, 3, border_mode="valid"))
+    model.add(Convolution2D(4, 3, 3, border_mode="valid"))
     model.add(LeakyReLU(0.33))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
     # 4x15x15
+    """
     new_image_height = (((image_height - 2) / 2) - 2) / 2
     new_image_height = int(new_image_height)
 
@@ -185,19 +243,20 @@ def create_model_tiny(image_height, image_width, loss, optimizer):
 
     nb_last_kernels = 4
     flat_size = nb_last_kernels * new_image_height * new_image_width
+    """
 
+    # after this: ((128-2)/2)-2)/2 height/width => 30,5 * 30,5 = 31 * 31 = 961
     model.add(Flatten())
 
-    model.add(Dense(flat_size, 64))
+    model.add(Dense(64))
     model.add(LeakyReLU(0.33))
     model.add(Dropout(0.5))
 
-    model.add(Dense(64, 64))
+    model.add(Dense(64))
     model.add(LeakyReLU(0.33))
     model.add(Dropout(0.5))
 
-    #model.add(Dense(64, 4))
-    model.add(Dense(64, 8))
+    model.add(Dense(4))
     model.add(Activation("sigmoid"))
 
     print("Compiling...")
@@ -218,7 +277,7 @@ def create_model(image_height, image_width, loss, optimizer):
     model = Sequential()
 
      # Tensor size at this point (if 128x128 input): 3x128x128
-    model.add(Convolution2D(32, 3, 3, 3, border_mode="same"))
+    model.add(Convolution2D(32, 3, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
     model.add(BatchNormalization())
     model.add(LeakyReLU(0.33))
     model.add(Convolution2D(32, 32, 3, 3, border_mode="same"))
