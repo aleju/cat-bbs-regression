@@ -2,24 +2,20 @@
 """
 Trains a model to locate cat faces in images (assumes that the image contains a cat face).
 """
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import absolute_import, division, print_function
 from dataset import Dataset, ImageWithKeypoints, Keypoints, Rectangle
 import numpy as np
 import argparse
 import os
-from scipy import misc
 from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Activation, Reshape, TimeDistributedDense, \
-                              RepeatVector, Flatten
-from keras.layers.advanced_activations import LeakyReLU
-from keras.optimizers import SGD, Adagrad, Adam
-from keras.utils.generic_utils import Progbar
+from keras.layers.core import Dense, Dropout, Activation, Reshape, Flatten
+from keras.layers.advanced_activations import LeakyReLU, ELU
+from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
 from keras.regularizers import l2
-from keras.layers.recurrent import GRU, LSTM
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
-from keras.layers.noise import GaussianNoise
 from keras.callbacks import ModelCheckpoint
+from keras.utils.generic_utils import Progbar
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -217,6 +213,7 @@ def create_model_tiny(image_height, image_width, loss, optimizer):
     Args:
         image_height: The height of the input images.
         image_width: The width of the input images.
+        loss: Keras loss function (name or object), e.g. "mse".
         optimizer: Keras optimizer to use, e.g. Adam() or "sgd".
     Returns:
         Sequential
@@ -224,36 +221,28 @@ def create_model_tiny(image_height, image_width, loss, optimizer):
 
     model = Sequential()
 
-     # 3x64x64
-    model.add(Convolution2D(4, 3, 3, border_mode="valid", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
-    model.add(LeakyReLU(0.33))
+     # 3x128x128
+    model.add(Convolution2D(4, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
+    model.add(ELU())
     model.add(MaxPooling2D((2, 2)))
-    model.add(Convolution2D(4, 3, 3, border_mode="valid"))
-    model.add(LeakyReLU(0.33))
+
+    # 4x64x64
+    model.add(Convolution2D(8, 3, 3, border_mode="same"))
+    model.add(ELU())
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
-    # 4x15x15
-    """
-    new_image_height = (((image_height - 2) / 2) - 2) / 2
-    new_image_height = int(new_image_height)
+    # 8x32x32
+    model.add(Convolution2D(16, 3, 3, border_mode="same"))
+    model.add(ELU())
+    model.add(MaxPooling2D((2, 2)))
+    model.add(Dropout(0.5))
 
-    new_image_width = (((image_width - 2) / 2) - 2) / 2
-    new_image_width = int(new_image_width)
-
-    nb_last_kernels = 4
-    flat_size = nb_last_kernels * new_image_height * new_image_width
-    """
-
-    # after this: ((128-2)/2)-2)/2 height/width => 30,5 * 30,5 = 31 * 31 = 961
+    # 16x16x16 = 4096
     model.add(Flatten())
 
     model.add(Dense(64))
-    model.add(LeakyReLU(0.33))
-    model.add(Dropout(0.5))
-
-    model.add(Dense(64))
-    model.add(LeakyReLU(0.33))
+    model.add(ELU())
     model.add(Dropout(0.5))
 
     model.add(Dense(4))
@@ -269,6 +258,7 @@ def create_model(image_height, image_width, loss, optimizer):
     Args:
         image_height: The height of the input images.
         image_width: The width of the input images.
+        loss: Keras loss function (name or object), e.g. "mse".
         optimizer: Keras optimizer to use, e.g. Adam() or "sgd".
     Returns:
         Sequential
@@ -277,75 +267,45 @@ def create_model(image_height, image_width, loss, optimizer):
     model = Sequential()
 
      # Tensor size at this point (if 128x128 input): 3x128x128
-    model.add(Convolution2D(32, 3, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
+    model.add(Convolution2D(32, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
     model.add(BatchNormalization())
-    model.add(LeakyReLU(0.33))
-    model.add(Convolution2D(32, 32, 3, 3, border_mode="same"))
+    model.add(ELU())
+    model.add(Convolution2D(32, 3, 3, border_mode="same"))
     model.add(BatchNormalization())
-    model.add(LeakyReLU(0.33))
+    model.add(ELU())
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
     # Tensor size (...): 32x64x64
-    model.add(Convolution2D(64, 32, 3, 3, border_mode="valid"))
+    model.add(Convolution2D(64, 3, 3, border_mode="same"))
     model.add(BatchNormalization())
-    model.add(LeakyReLU(0.33))
-    model.add(Convolution2D(64, 64, 3, 3, border_mode="valid"))
+    model.add(ELU())
+    model.add(Convolution2D(64, 3, 3, border_mode="same"))
     model.add(BatchNormalization())
-    model.add(LeakyReLU(0.33))
+    model.add(ELU())
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
-    # Tensor size (...): 64x30x30
-    model.add(Convolution2D(128, 64, 3, 3, border_mode="valid"))
+    # Tensor size (...): 64x32x32
+    model.add(Convolution2D(128, 3, 3, border_mode="same"))
     model.add(BatchNormalization())
-    model.add(LeakyReLU(0.33))
-    model.add(Dropout(0.5))
-    model.add(Convolution2D(128, 128, 3, 3, border_mode="valid"))
-    model.add(BatchNormalization())
-    model.add(LeakyReLU(0.33))
+    model.add(ELU())
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
-    # Tensor size (...): 128x13x13
-    # calculate tensor size
-    new_image_height = image_height / 2
-    new_image_height = (new_image_height - 2 - 2) / 2
-    new_image_height = (new_image_height - 2 - 2) / 2
-    new_image_height = int(new_image_height)
-    new_image_width = new_image_height
-
-    nb_last_kernels = 128
-
-    # Reshape to timesteps of LSTM and normalize
-    model.add(Reshape(nb_last_kernels, new_image_height * new_image_width))
-    model.add(BatchNormalization((nb_last_kernels, new_image_height * new_image_width)))
-
-    # 1st LSTM layer
-    model.add(LSTM(new_image_height * new_image_width, 256, return_sequences=True))
-
-    # dropout, normalize
-    model.add(BatchNormalization((nb_last_kernels, 256)))
+    # 128x16x16
+    model.add(Convolution2D(256, 5, 5, border_mode="same"))
+    model.add(BatchNormalization())
+    model.add(ELU())
+    model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
-    # 2nd LSTM layer
-    model.add(LSTM(256, 32, return_sequences=True))
-    """
+    # 256x8x8 = 16384
     model.add(Flatten())
-    model.add(Dense(nb_last_kernels * 128, 1024))
-    model.add(BatchNormalization((1024,)))
-    model.add(LeakyReLU(0.33))
-    model.add(Dropout(0.5))
-    """
-
-    # dropout, normalize and sigmoid to 4 outputs (box center (x, y) and scale (height/2, width/2),
-    # all of these values are percentages of max (height/width))
-    model.add(Flatten())
-    model.add(BatchNormalization(nb_last_kernels * 32))
-    model.add(Dropout(0.5))
-    #model.add(Dense(nb_last_kernels * 32, 4))
-    model.add(Dense(nb_last_kernels * 32, 8))
-    #model.add(Dense(1024, 18))
+    model.add(Dense(128))
+    model.add(BatchNormalization())
+    model.add(ELU())
+    model.add(Dense(4))
     model.add(Activation("sigmoid"))
 
     # compile with mean squared error
