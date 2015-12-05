@@ -7,6 +7,7 @@ from dataset import Dataset, ImageWithKeypoints, Keypoints, Rectangle
 import numpy as np
 import argparse
 import os
+from scipy import misc
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Reshape, Flatten
 from keras.layers.advanced_activations import LeakyReLU, ELU
