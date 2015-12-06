@@ -32,27 +32,10 @@ os.sys.setrecursionlimit(10000)
 np.random.seed(42)
 random.seed(42)
 
+CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+
 # faces with a total area below this value will not be saved
 MINIMUM_AREA = 8 * 8
-
-# filepath of the weights file, as created by train_cat_face_locator.py
-WEIGHTS_FILEPATH = "/media/aj/ssd2a/nlp/python/git/vec2cat/cat-face-detector/" \
-                   "cat_face_locator.weights"
-
-# directory of the cat images
-SOURCE_DIR = "/media/aj/grab/ml/datasets/flickr-cats/images"
-
-# directory to save the cat images in
-TARGET_DIR = "/media/aj/grab/ml/datasets/flickr-cats/images_faces_aug"
-
-# padded area around each image, before augmentation is applied
-# padding helps to combat black areas that can appear after augmentation
-# will be removed before saving
-AUGMENTATION_PADDING = 30
-
-# number of augmentations to perform on each image, i.e. 10 will create 10 additional
-# agumented images (each original image will also saved)
-AUGMENTATION_ITERATIONS = 15
 
 # scale (height, width) of each saved image
 OUT_SCALE = 64
@@ -73,50 +56,38 @@ def main():
     * Resizes each face image to OUT_SCALE (height, width)
     * Saves each face image (unaugmented + augmented images)
     """
-    
+    parser = argparse.ArgumentParser(description="Apply a trained cat face locator model images.")
+    parser.add_argument("--images", required=True, help="Path to the images directory.")
+    parser.add_argument("--weights", required=False, default="cat_face_locator.best.weights", help="Filepath to the weights of the model.")
+    parser.add_argument("--output", required=False, default="apply_model_output", help="Filepath to the directory in which to save the output.")
+    args = parser.parse_args()
+
     # --------------
     # load images
     # --------------
-    images, paths = get_images([SOURCE_DIR])
-    images = images
-    paths = paths
-    # we will use the image filenames when saving the images at the end
-    images_filenames = [path[path.rfind("/")+1:] for path in paths]
-    
+    dataset = Dataset([args.images])
+    nb_images = len(dataset.fps)
+    X = np.zeros((nb_images, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, 3), dtype=np.float32)
+    paths = []
+    for i, fp, image in enumerate(zip(dataset.fps, dataset.get_images())):
+        image.square()
+        image.resize(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)
+        X[i] = image.image_arr / 255.0
+        paths.append(fp)
+    X = np.rollaxis(X, 3, 1)
+
     # --------------
     # create model
     # --------------
     #model = create_model_tiny(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, Adam())
     model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, Adam())
-    load_weights_seq(model, WEIGHTS_FILEPATH)
-
-    # --------------
-    # make all images square with required sizes
-    # and roll color channel to dimension index 1 (required by theano)
-    # --------------
-    paddings = []
-    images_padded = np.zeros((len(images), MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, 3))
-    for idx, image in enumerate(images):
-        if idx == 0:
-            print(idx, image.shape, paths[idx])
-        image_padded, (pad_top, pad_right, pad_bottom, pad_left) = square_image(image)
-        images_padded[idx] = misc.imresize(image_padded, (MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH))
-        paddings.append((pad_top, pad_right, pad_bottom, pad_left))
-    
-    #misc.imshow(images_padded[0])
-    
-    # roll color channel
-    images_padded = np.rollaxis(images_padded, 3, 1)
-
-    # project to 0-1
-    images_padded /= 255
-    #print(images_padded[0])
+    model.load_weights(args.weights)
 
     # --------------
     # predict positions of faces
     # --------------
     coordinates_predictions = predict_on_images(model, images_padded)
-    
+
     print("[Predicted positions]", coordinates_predictions[0])
     """
     for idx, (tl_y, tl_x, br_y, br_x) in enumerate(coordinates_predictions):
@@ -124,7 +95,7 @@ def main():
                                            (255,), channel_is_first_axis=True)
         misc.imshow(marked_image)
     """
-    
+
     # --------------
     # project coordinates from small padded images to full-sized original images (without padding)
     # --------------
@@ -135,24 +106,24 @@ def main():
         width_full = images[idx].shape[1] + pad_right + pad_left
         height_orig = images[idx].shape[0]
         width_orig = images[idx].shape[1]
-        
+
         tl_y_perc = tl_y / MODEL_IMAGE_HEIGHT
         tl_x_perc = tl_x / MODEL_IMAGE_WIDTH
         br_y_perc = br_y / MODEL_IMAGE_HEIGHT
         br_x_perc = br_x / MODEL_IMAGE_WIDTH
-        
+
         # coordinates on full sized squared image version
         tl_y_full = int(tl_y_perc * height_full)
         tl_x_full = int(tl_x_perc * width_full)
         br_y_full = int(br_y_perc * height_full)
         br_x_full = int(br_x_perc * width_full)
-        
+
         # remove paddings to get coordinates on original images
         tl_y_orig = tl_y_full - pad_top
         tl_x_orig = tl_x_full - pad_left
         br_y_orig = br_y_full - pad_top
         br_x_orig = br_x_full - pad_left
-        
+
         # fix broken coordinates
         # anything below 0
         # anything above image height (y) or width (x)
@@ -161,35 +132,35 @@ def main():
         tl_x_orig = min(max(tl_x_orig, 0), width_orig)
         br_y_orig = min(max(br_y_orig, 0), height_orig)
         br_x_orig = min(max(br_x_orig, 0), width_orig)
-        
+
         if tl_y_orig >= br_y_orig:
             tl_y_orig = br_y_orig - 1
         if tl_x_orig >= br_x_orig:
             tl_x_orig = br_x_orig - 1
-        
+
         coordinates_orig.append((tl_y_orig, tl_x_orig, br_y_orig, br_x_orig))
-    
+
     """
     # project face coordinates to original image sizes
     coordinates_orig = []
     for idx, (tl_y, tl_x, br_y, br_x) in enumerate(coordinates_nopad):
         height_orig = images[idx].shape[0]
         width_orig = images[idx].shape[1]
-        
+
         tl_y_perc = tl_y / MODEL_IMAGE_HEIGHT
         tl_x_perc = tl_x / MODEL_IMAGE_WIDTH
         br_y_perc = br_y / MODEL_IMAGE_HEIGHT
         br_x_perc = br_x / MODEL_IMAGE_WIDTH
-        
+
         tl_y_orig = int(tl_y_perc * height_orig)
         tl_x_orig = int(tl_x_perc * width_orig)
         br_y_orig = int(br_y_perc * height_orig)
         br_x_orig = int(br_x_perc * width_orig)
-        
+
         coordinates_orig.append((tl_y_orig, tl_x_orig, br_y_orig, br_x_orig))
-    
+
     print("[Coordinates on original image]", coordinates_orig[0])
-    
+
     # remove padding from predicted face coordinates
     # tl = top left, br = bottom right
     coordinates_nopad = []
@@ -206,17 +177,17 @@ def main():
         elif tpl_fixed[1] >= tpl_fixed[3]:
             tpl_fixed[3] += 1
         tpl_fixed = tuple(tpl_fixed)
-        
+
         if tpl != tpl_fixed:
             print("[WARNING] Predicted coordinate below 0 after padding-removel. Bad prediction." \
                   " (In image %d, coordinates nopad: %s, coordinates pred: %s)" \
                   % (idx, tpl, coordinates_predictions[idx]))
-        
+
         coordinates_nopad.append(tpl_fixed)
     """
-    
+
     print("[Removed padding from predicted coordinates]", coordinates_orig[0])
-    
+
     # --------------
     # square faces
     # --------------
@@ -243,9 +214,9 @@ def main():
             i += 1
         print("New height:", (br_y-tl_y), "New width:", (br_x-tl_x))
         coordinates_orig_square.append((tl_y, tl_x, br_y, br_x))
-    
+
     print("[Squared face coordinates]", coordinates_orig_square[0])
-    
+
     # --------------
     # pad faces
     # --------------
@@ -266,10 +237,10 @@ def main():
                                    tl_x:br_x+2*AUGMENTATION_PADDING, \
                                    ...]
         faces_padded.append(face_padded)
-    
+
     print("[Extracted face with padding]")
     misc.imshow(faces_padded[0])
-    
+
     # --------------
     # augment and save images
     # --------------
@@ -278,7 +249,7 @@ def main():
         image_height = face_padded.shape[0]
         image_width = face_padded.shape[1]
         print("[specs of padded face] height", image_height, "width", image_width)
-        
+
         # augment the padded images
         ia = ImageAugmenter(image_width, image_height,
                             channel_is_first_axis=False,
@@ -292,32 +263,32 @@ def main():
             images_aug[i, ...] = face_padded
         print("images_aug.shape", images_aug.shape)
         images_aug = ia.augment_batch(images_aug)
-        
+
         # randomly change brightness of whole images
         for idx_aug, image_aug in enumerate(images_aug):
             by_percent = random.uniform(0.90, 1.10)
             images_aug[idx_aug] = np.clip(image_aug * by_percent, 0.0, 1.0)
         print("images_aug.shape [0]:", images_aug.shape)
-        
+
         # add gaussian noise
         # skipped, because that could be added easily in torch as a layer
         #images_aug = images_aug + np.random.normal(0.0, 0.05, images_aug.shape)
-        
+
         # remove the padding
         images_aug = images_aug[:,
                                 AUGMENTATION_PADDING:-AUGMENTATION_PADDING,
                                 AUGMENTATION_PADDING:-AUGMENTATION_PADDING,
                                 ...]
         print("images_aug.shape [1]:", images_aug.shape)
-        
+
         # add the unaugmented image
         images_aug = np.vstack((images_aug, \
                                 [face_padded[AUGMENTATION_PADDING:-AUGMENTATION_PADDING, \
                                              AUGMENTATION_PADDING:-AUGMENTATION_PADDING, \
                                              ...]]))
-        
+
         print("images_aug.shape [2]:", images_aug.shape)
-        
+
         # save images
         for i, image_aug in enumerate(images_aug):
             if image_aug.shape[0] * image_aug.shape[1] < MINIMUM_AREA:
