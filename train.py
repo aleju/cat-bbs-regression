@@ -28,8 +28,8 @@ NB_LOAD_IMAGES = 2
 SPLIT = 0.1
 EPOCHS = 50
 BATCH_SIZE = 64
-SAVE_WEIGHTS_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator128x128.weights")
-SAVE_WEIGHTS_CHECKPOINT_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator128x128.best.weights")
+SAVE_WEIGHTS_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator.weights")
+SAVE_WEIGHTS_CHECKPOINT_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator.best.weights")
 SAVE_PREDICTIONS = True
 SAVE_PREDICTIONS_DIR = os.path.join(CURRENT_DIR, "predictions")
 
