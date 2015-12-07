@@ -137,35 +137,17 @@ def predict_on_images(model, X):
     """
     return model.predict(X, batch_size=BATCH_SIZE)
 
-def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
-    """Draws a (face) rectangle onto the image at the provided coordinates.
-    Args:
-        image_arr   Numpy array of the image.
-        y           y-coordinate of the rectangle (normalized to 0-1).
-        x           x-coordinate of the rectangle (normalized to 0-1).
-        half_height Half of the height of the rectangle (normalized to 0-1).
-        half_width  Half of the width of the rectangle (normalized to 0-1).
-    Returns:
-        Modified image (numpy array)
-    """
-    assert image_arr.shape[0] == 3, str(image_arr.shape)
-    height = image_arr.shape[1]
-    width = image_arr.shape[2]
-    image_arr = np.copy(image_arr) * 255
-    image_arr = np.rollaxis(image_arr, 0, 3)
-    keypoints = np.zeros((9*2,), dtype=np.uint16) # dummy keypoints
-    image = ImageWithKeypoints(image_arr, Keypoints(keypoints))
-
-    tl_y = (y - half_height) * height
-    tl_x = (x - half_width) * width
-    br_y = (y + half_height) * height
-    br_x = (x + half_width) * width
+def unnormalize_prediction(y, x, half_height, half_width, img_height=MODEL_IMAGE_HEIGHT, img_width=MODEL_IMAGE_WIDTH):
+    tl_y = (y - half_height) * img_height
+    tl_x = (x - half_width) * img_width
+    br_y = (y + half_height) * img_height
+    br_x = (x + half_width) * img_width
 
     # make sure that x and y coordinates are within image boundaries
-    tl_y = clip(0, tl_y, height-2)
-    tl_x = clip(0, tl_x, width-2)
-    br_y = clip(0, br_y, height-1)
-    br_x = clip(0, br_x, width-1)
+    tl_y = clip(0, tl_y, img_height-2)
+    tl_x = clip(0, tl_x, img_width-2)
+    br_y = clip(0, br_y, img_height-1)
+    br_x = clip(0, br_x, img_width-1)
 
     if tl_y > br_y:
         tl_y, br_y = br_y, tl_y
@@ -186,6 +168,28 @@ def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
             br_x += 1
         else:
             tl_x -= 1
+
+    return tl_y, tl_x, br_y, br_x
+
+def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
+    """Draws a (face) rectangle onto the image at the provided coordinates.
+    Args:
+        image_arr   Numpy array of the image.
+        y           y-coordinate of the rectangle (normalized to 0-1).
+        x           x-coordinate of the rectangle (normalized to 0-1).
+        half_height Half of the height of the rectangle (normalized to 0-1).
+        half_width  Half of the width of the rectangle (normalized to 0-1).
+    Returns:
+        Modified image (numpy array)
+    """
+    assert image_arr.shape[0] == 3, str(image_arr.shape)
+    height = image_arr.shape[1]
+    width = image_arr.shape[2]
+    image_arr = np.copy(image_arr) * 255
+    image_arr = np.rollaxis(image_arr, 0, 3)
+    keypoints = np.zeros((9*2,), dtype=np.uint16) # dummy keypoints
+    image = ImageWithKeypoints(image_arr, Keypoints(keypoints))
+    tl_y, tl_x, br_y, br_x = unnormalize_prediction(y, x, half_height, half_width, img_height=height, img_width=width)
 
     image.draw_rectangle(Rectangle(tl_y=int(tl_y), tl_x=int(tl_y), br_y=int(br_y), br_x=int(br_x)))
     return image.to_array()
