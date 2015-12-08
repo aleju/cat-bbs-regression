@@ -33,6 +33,7 @@ np.random.seed(42)
 random.seed(42)
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+WRITE_TO_DIR = os.path.join(CURRENT_DIR, "apply_locator_output")
 
 # faces with a total area below this value will not be saved
 MINIMUM_AREA = 8 * 8
@@ -66,11 +67,12 @@ def main():
     # load images
     # --------------
     dataset = Dataset([args.images])
+    filenames = [os.basename(fp) for fp in dataset.fps] # will be used during saving
     nb_images = len(dataset.fps)
     X = np.zeros((nb_images, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, 3), dtype=np.float32)
     paths = []
     for i, fp, image in enumerate(zip(dataset.fps, dataset.get_images())):
-        image.square()
+        #image.square()
         image.resize(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)
         X[i] = image.image_arr / 255.0
         paths.append(fp)
@@ -80,7 +82,7 @@ def main():
     # create model
     # --------------
     #model = create_model_tiny(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, Adam())
-    model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, Adam())
+    model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
     model.load_weights(args.weights)
 
     # --------------
@@ -89,12 +91,12 @@ def main():
     preds = predict_on_images(model, images_padded)
 
     # --------------
-    # project coordinates from small padded images to full-sized original images (without padding)
+    # Calculate exact coordinates of faces on original images
     # --------------
     coords = []
     for idx, (y, x, half_height, half_width) in enumerate(preds):
-        orig_height = X_orig[idx].shape[2]
-        orig_width = X_orig[idx].shape[3]
+        orig_height = X[idx].shape[2]
+        orig_width = X[idx].shape[3]
         tl_y, tl_x, br_y, br_x = unnormalize_prediction(y, x, half_height, half_width, img_height=orig_height, img_width=orig_width)
         """keypoints = np.zeros((9*2,), dtype=np.uint16)
         keypoints[0:4] = [tl_y, tl_x, br_y, br_x]
@@ -102,6 +104,29 @@ def main():
         image.resize()"""
 
         coords.append((tl_y, tl_x, br_y, br_x))
+
+    # --------------
+    # Save images
+    # --------------
+    print("Saving images...")
+    for idx, (tl_y, tl_x, br_y, br_x) in enumerate(coords):
+        img = draw_rectangle(X[idx], tl_y, tl_x, br_y, br_x)
+        filepath = os.path.join(WRITE_TO_DIR, filenames[idx])
+        misc.imsave(filepath, img)
+
+def draw_rectangle(img, tl_y, tl_x, br_y, br_x):
+    img = np.copy(img)
+    lines = [
+        (tl_y, tl_x, tl_y, br_x), # top left to top right
+        (tl_y, br_x, br_y, br_x), # top right to bottom right
+        (br_y, br_x, br_y, tl_x), # bottom right to bottom left
+        (br_y, tl_x, tl_y, tl_x)  # bottom left to top left
+    ]
+    for y0, x0, y1, x1 in lines:
+        rr, cc, val = draw.line_aa(y0, x0, y1, y1)
+        img[:, rr, cc] = val * 255
+
+    return img
 
 def get_images(dirs):
     """Collects all images in given directories.
