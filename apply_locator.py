@@ -1,29 +1,25 @@
 # -*- coding: utf-8 -*-
 """
 File to apply the trained ConvNet model to a number of images.
-It will use the ConvNet to locate the cat faces in the images, extract these faces,
-augment them (i.e. rotate, translate...) and then save them (i.e. only the faces).
-It is expected that each image contains a cat (i.e. a face will be extracted of each image, even
-if there is no cat).
+It will use the ConvNet to locate cat faces in the images and mark them.
+It is expected that each image contains exactly one cat (i.e. a face will be
+extracted out of each image, even if there is no cat).
 If an image contains multiple cats, only one face will be extracted.
 
 Usage:
-    python train_cat_face_locator.py
+    python train.py
     python apply_locator.py
-
-Note:
-    You should change the constants 'SOURCE_DIR' and 'TARGET_DIR' to your settings.
 """
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import division, print_function
 import os
 import numpy as np
 import random
 import re
 from scipy import misc
 from scipy import ndimage
-from cat_face_locator import MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, GRAYSCALE,
-                             SAVE_WEIGHTS_FILEPATH, create_model, create_model_tiny,
-                             predict_on_images, square_image, visualize_rectangle
+from train import MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, BATCH_SIZE,
+                  SAVE_WEIGHTS_FILEPATH, create_model, create_model_tiny,
+                  draw_rectangle
 from saveload import load_weights_seq
 from keras.optimizers import Adam
 from ImageAugmenter import ImageAugmenter
@@ -47,15 +43,11 @@ def main():
     Does the following step by step:
     * Load images (from which to extract cat faces) from SOURCE_DIR
     * Initialize model (as trained via train_cat_face_locator.py)
-    * Prepares images for the model (i.e. shrinks them, squares them)
-    * Lets model locate cat faces in the images
+    * Loads and prepares images for the model.
+    * Uses trained model to predict locations of cat faces.
     * Projects face coordinates onto original images
-    * Squares the face rectangles (as we want to get square images at the end)
-    * Extracts faces from images with some pixels of padding around theM
-    * Augments each face image several times
-    * Removes the padding from each face image
-    * Resizes each face image to OUT_SCALE (height, width)
-    * Saves each face image (unaugmented + augmented images)
+    * Marks faces in original images.
+    * Saves each marked image.
     """
     parser = argparse.ArgumentParser(description="Apply a trained cat face locator model images.")
     parser.add_argument("--images", required=True, help="Path to the images directory.")
@@ -63,9 +55,7 @@ def main():
     parser.add_argument("--output", required=False, default="apply_model_output", help="Filepath to the directory in which to save the output.")
     args = parser.parse_args()
 
-    # --------------
     # load images
-    # --------------
     dataset = Dataset([args.images])
     filenames = [os.basename(fp) for fp in dataset.fps] # will be used during saving
     nb_images = len(dataset.fps)
@@ -78,21 +68,15 @@ def main():
         paths.append(fp)
     X = np.rollaxis(X, 3, 1)
 
-    # --------------
     # create model
-    # --------------
     #model = create_model_tiny(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, Adam())
     model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
     model.load_weights(args.weights)
 
-    # --------------
     # predict positions of faces
-    # --------------
-    preds = predict_on_images(model, images_padded)
+    preds = model.predict(X, batch_size=BATCH_SIZE)
 
-    # --------------
     # Calculate exact coordinates of faces on original images
-    # --------------
     coords = []
     for idx, (y, x, half_height, half_width) in enumerate(preds):
         orig_height = X[idx].shape[2]
@@ -105,28 +89,12 @@ def main():
 
         coords.append((tl_y, tl_x, br_y, br_x))
 
-    # --------------
     # Save images
-    # --------------
     print("Saving images...")
     for idx, (tl_y, tl_x, br_y, br_x) in enumerate(coords):
         img = draw_rectangle(X[idx], tl_y, tl_x, br_y, br_x)
         filepath = os.path.join(WRITE_TO_DIR, filenames[idx])
         misc.imsave(filepath, img)
-
-def draw_rectangle(img, tl_y, tl_x, br_y, br_x):
-    img = np.copy(img)
-    lines = [
-        (tl_y, tl_x, tl_y, br_x), # top left to top right
-        (tl_y, br_x, br_y, br_x), # top right to bottom right
-        (br_y, br_x, br_y, tl_x), # bottom right to bottom left
-        (br_y, tl_x, tl_y, tl_x)  # bottom left to top left
-    ]
-    for y0, x0, y1, x1 in lines:
-        rr, cc, val = draw.line_aa(y0, x0, y1, y1)
-        img[:, rr, cc] = val * 255
-
-    return img
 
 def get_images(dirs):
     """Collects all images in given directories.

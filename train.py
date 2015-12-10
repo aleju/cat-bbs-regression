@@ -75,7 +75,7 @@ def main():
     # save predictions on val set
     if SAVE_PREDICTIONS:
         print("Saving example predictions...")
-        y_preds = predict_on_images(model, X_val)
+        y_preds = model.predict(X_val, batch_size=BATCH_SIZE)
         for img_idx, (y, x, half_height, half_width) in enumerate(y_preds):
             img_arr = draw_predicted_rectangle(X_val[img_idx], y, x, half_height, half_width)
             filepath = os.path.join(SAVE_PREDICTIONS_DIR, "%d.png" % (img_idx,))
@@ -123,21 +123,25 @@ def load_Xy(dataset, nb_load, nb_augmentations):
             break
 
     X = np.rollaxis(X, 3, 1)
-    print(X.shape)
 
     return X, y
 
-def predict_on_images(model, X):
-    """Predicts the coordinates of face rectangles for given images.
-    Args:
-        model: The neural net model.
-        images: Numpy array of images.
-    Returns:
-        List of coordinate-arrays
-    """
-    return model.predict(X, batch_size=BATCH_SIZE)
-
 def unnormalize_prediction(y, x, half_height, half_width, img_height=MODEL_IMAGE_HEIGHT, img_width=MODEL_IMAGE_WIDTH):
+    """Transforms a predictions from normalized (0 to 1) y, x, half-width,
+    half-height to pixel values (top left y, top left x, bottom right y,
+    bottom right x).
+    Args:
+        y: Normalized y coordinate of rectangle center.
+        x: Normalized x coordinate of rectangle center.
+        half_height: Normalized height of rectangle.
+        half_width: Normalized width of rectangle.
+        img_height: Height of the image to use while unnormalizing.
+        img_width: Width of the image to use while unnormalizing.
+    Returns:
+        (top left y in px, top left x in px, bottom right y in px,
+        bottom right x in px)
+    """
+    # calculate x, y of corners in pixels
     tl_y = (y - half_height) * img_height
     tl_x = (x - half_width) * img_width
     br_y = (y + half_height) * img_height
@@ -149,6 +153,7 @@ def unnormalize_prediction(y, x, half_height, half_width, img_height=MODEL_IMAGE
     br_y = clip(0, br_y, img_height-1)
     br_x = clip(0, br_x, img_width-1)
 
+    # make sure that top left corner is really top left of bottom right values
     if tl_y > br_y:
         tl_y, br_y = br_y, tl_y
     if tl_x > br_x:
@@ -172,35 +177,55 @@ def unnormalize_prediction(y, x, half_height, half_width, img_height=MODEL_IMAGE
     return tl_y, tl_x, br_y, br_x
 
 def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
-    """Draws a (face) rectangle onto the image at the provided coordinates.
+    """Draws a rectangle onto the image at the provided coordinates.
     Args:
-        image_arr   Numpy array of the image.
-        y           y-coordinate of the rectangle (normalized to 0-1).
-        x           x-coordinate of the rectangle (normalized to 0-1).
-        half_height Half of the height of the rectangle (normalized to 0-1).
-        half_width  Half of the width of the rectangle (normalized to 0-1).
+        image_arr: Numpy array of the image.
+        y: y-coordinate of the rectangle (normalized to 0-1).
+        x: x-coordinate of the rectangle (normalized to 0-1).
+        half_height: Half of the height of the rectangle (normalized to 0-1).
+        half_width: Half of the width of the rectangle (normalized to 0-1).
     Returns:
         Modified image (numpy array)
     """
     assert image_arr.shape[0] == 3, str(image_arr.shape)
     height = image_arr.shape[1]
     width = image_arr.shape[2]
+    tl_y, tl_x, br_y, br_x = unnormalize_prediction(y, x, half_height, half_width, img_height=height, img_width=width)
     image_arr = np.copy(image_arr) * 255
     image_arr = np.rollaxis(image_arr, 0, 3)
-    keypoints = np.zeros((9*2,), dtype=np.uint16) # dummy keypoints
-    image = ImageWithKeypoints(image_arr, Keypoints(keypoints))
-    tl_y, tl_x, br_y, br_x = unnormalize_prediction(y, x, half_height, half_width, img_height=height, img_width=width)
+    return draw_rectangle(image_arr, tl_y, tl_x, br_y, br_x)
 
-    image.draw_rectangle(Rectangle(tl_y=int(tl_y), tl_x=int(tl_y), br_y=int(br_y), br_x=int(br_x)))
-    return image.to_array()
+def draw_rectangle(img, tl_y, tl_x, br_y, br_x):
+    """Draws a rectangle onto an image.
+    Args:
+        img: The image as a numpy array of shape (row, col, channel).
+        tl_y: Top left y coordinate as pixel.
+        tl_x: Top left x coordinate as pixel.
+        br_y: Top left y coordinate as pixel.
+        br_x: Top left x coordinate as pixel.
+    Returns:
+        image with rectangle
+    """
+    img = np.copy(img)
+    lines = [
+        (tl_y, tl_x, tl_y, br_x), # top left to top right
+        (tl_y, br_x, br_y, br_x), # top right to bottom right
+        (br_y, br_x, br_y, tl_x), # bottom right to bottom left
+        (br_y, tl_x, tl_y, tl_x)  # bottom left to top left
+    ]
+    for y0, x0, y1, x1 in lines:
+        rr, cc, val = draw.line_aa(y0, x0, y1, y1)
+        img[:, rr, cc] = val * 255
+
+    return img
 
 def clip(lower, val, upper):
     """Clips a value. For lower bound L, upper bound U and value V it
     makes sure that L <= V <= U holds.
     Args:
-        lower:  Lower boundary (including)
-        val:    The value to clip
-        upper:  Upper boundary (including)
+        lower: Lower boundary (including)
+        val: The value to clip
+        upper: Upper boundary (including)
     Returns:
         value within bounds
     """
@@ -271,7 +296,7 @@ def create_model(image_height, image_width, loss, optimizer):
 
     model = Sequential()
 
-     # Tensor size at this point (if 128x128 input): 3x128x128
+     # 3x128x128
     model.add(Convolution2D(32, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
     model.add(BatchNormalization())
     model.add(ELU())
@@ -281,7 +306,7 @@ def create_model(image_height, image_width, loss, optimizer):
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
-    # Tensor size (...): 32x64x64
+    # 32x64x64
     model.add(Convolution2D(64, 3, 3, border_mode="same"))
     model.add(BatchNormalization())
     model.add(ELU())
@@ -291,7 +316,7 @@ def create_model(image_height, image_width, loss, optimizer):
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
-    # Tensor size (...): 64x32x32
+    # 64x32x32
     model.add(Convolution2D(128, 3, 3, border_mode="same"))
     model.add(BatchNormalization())
     model.add(ELU())
