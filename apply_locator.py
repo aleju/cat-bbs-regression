@@ -20,20 +20,14 @@ from scipy import ndimage
 from train import MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, BATCH_SIZE,
                   SAVE_WEIGHTS_FILEPATH, create_model, create_model_tiny,
                   draw_rectangle
-from saveload import load_weights_seq
 from keras.optimizers import Adam
 from ImageAugmenter import ImageAugmenter
 
-os.sys.setrecursionlimit(10000)
 np.random.seed(42)
 random.seed(42)
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 WRITE_TO_DIR = os.path.join(CURRENT_DIR, "apply_locator_output")
-
-# faces with a total area below this value will not be saved
-MINIMUM_AREA = 8 * 8
-
 # scale (height, width) of each saved image
 OUT_SCALE = 64
 
@@ -49,14 +43,14 @@ def main():
     * Marks faces in original images.
     * Saves each marked image.
     """
-    parser = argparse.ArgumentParser(description="Apply a trained cat face locator model images.")
-    parser.add_argument("--images", required=True, help="Path to the images directory.")
+    parser = argparse.ArgumentParser(description="Apply a trained cat face locator model to images.")
+    parser.add_argument("--dataset", required=True, help="Path to the images directory.")
     parser.add_argument("--weights", required=False, default="cat_face_locator.best.weights", help="Filepath to the weights of the model.")
     parser.add_argument("--output", required=False, default="apply_model_output", help="Filepath to the directory in which to save the output.")
     args = parser.parse_args()
 
     # load images
-    dataset = Dataset([args.images])
+    dataset = Dataset([args.dataset])
     filenames = [os.basename(fp) for fp in dataset.fps] # will be used during saving
     nb_images = len(dataset.fps)
     X = np.zeros((nb_images, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, 3), dtype=np.float32)
