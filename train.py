@@ -8,6 +8,7 @@ import numpy as np
 import argparse
 import os
 from scipy import misc
+from skimage import draw
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Reshape, Flatten
 from keras.layers.advanced_activations import LeakyReLU, ELU
@@ -36,11 +37,11 @@ SAVE_PREDICTIONS_DIR = os.path.join(CURRENT_DIR, "predictions")
 def main():
     """Main method that reads the images, trains a model, then saves weights and predictions."""
     parser = argparse.ArgumentParser(description="Train a model to locate cat faces in images.")
-    parser.add_argument("--path", required=True, help="Path to your 10k cats dataset directory")
+    parser.add_argument("--dataset", required=True, help="Path to your 10k cats dataset directory")
     args = parser.parse_args()
 
     subdir_names = ["CAT_00", "CAT_01", "CAT_02", "CAT_03", "CAT_04", "CAT_05", "CAT_06"]
-    subdirs = [os.path.join(args.path, subdir) for subdir in subdir_names]
+    subdirs = [os.path.join(args.dataset, subdir) for subdir in subdir_names]
 
     # initialize dataset
     dataset = Dataset(subdirs)
@@ -142,10 +143,10 @@ def unnormalize_prediction(y, x, half_height, half_width, img_height=MODEL_IMAGE
         bottom right x in px)
     """
     # calculate x, y of corners in pixels
-    tl_y = (y - half_height) * img_height
-    tl_x = (x - half_width) * img_width
-    br_y = (y + half_height) * img_height
-    br_x = (x + half_width) * img_width
+    tl_y = int((y - half_height) * img_height)
+    tl_x = int((x - half_width) * img_width)
+    br_y = int((y + half_height) * img_height)
+    br_x = int((x + half_width) * img_width)
 
     # make sure that x and y coordinates are within image boundaries
     tl_y = clip(0, tl_y, img_height-2)
@@ -206,6 +207,7 @@ def draw_rectangle(img, tl_y, tl_x, br_y, br_x):
     Returns:
         image with rectangle
     """
+    assert img.shape[2] == 3, img.shape[2]
     img = np.copy(img)
     lines = [
         (tl_y, tl_x, tl_y, br_x), # top left to top right
@@ -214,8 +216,8 @@ def draw_rectangle(img, tl_y, tl_x, br_y, br_x):
         (br_y, tl_x, tl_y, tl_x)  # bottom left to top left
     ]
     for y0, x0, y1, x1 in lines:
-        rr, cc, val = draw.line_aa(y0, x0, y1, y1)
-        img[:, rr, cc] = val * 255
+        rr, cc, val = draw.line_aa(y0, x0, y1, x1)
+        img[rr, cc, 0] = val * 255
 
     return img
 
