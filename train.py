@@ -6,6 +6,7 @@ from __future__ import absolute_import, division, print_function
 from dataset import Dataset, ImageWithKeypoints, Keypoints, Rectangle
 import numpy as np
 import argparse
+import random
 import os
 from scipy import misc
 from skimage import draw
@@ -18,6 +19,9 @@ from keras.regularizers import l2
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.callbacks import ModelCheckpoint
 from keras.utils.generic_utils import Progbar
+
+np.random.seed(42)
+random.seed(42)
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
