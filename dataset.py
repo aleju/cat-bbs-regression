@@ -156,6 +156,8 @@ class ImageWithKeypoints(object):
                                                  (nb_left, nb_right), \
                                                  (0, 0)), \
                                                  mode=mode)
+        self.keypoints.shift_y(nb_top, self)
+        self.keypoints.shift_x(nb_left, self)
 
     def unpad(self, nb_pixels):
         """Removes padding around the image. Updates keypoints accordingly.
