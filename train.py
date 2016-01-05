@@ -31,7 +31,7 @@ PADDING = 20
 AUGMENTATIONS = 2
 NB_LOAD_IMAGES = 9500
 SPLIT = 0.1
-EPOCHS = 50
+EPOCHS = 150
 BATCH_SIZE = 64
 SAVE_WEIGHTS_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator.weights")
 SAVE_WEIGHTS_CHECKPOINT_FILEPATH = os.path.join(CURRENT_DIR, "cat_face_locator.best.weights")
@@ -418,8 +418,8 @@ def create_model_c(image_height, image_width, loss, optimizer):
 
     model = Sequential()
 
-     # 3x128x128
-    model.add(Convolution2D(16, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
+    # 3x128x128
+    model.add(Convolution2D(32, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
     #model.add(BatchNormalization())
     #model.add(ELU())
     #model.add(LeakyReLU(0.33))
@@ -470,11 +470,13 @@ def create_model_c(image_height, image_width, loss, optimizer):
 
     # 128x8x8 = 8192
     model.add(Flatten())
+
     model.add(Dense(256))
     #model.add(BatchNormalization())
     #model.add(ELU())
     model.add(Activation("tanh"))
     model.add(Dropout(0.5))
+
     model.add(Dense(4))
     model.add(Activation("sigmoid"))
 
