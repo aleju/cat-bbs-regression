@@ -426,7 +426,17 @@ def create_model_c(image_height, image_width, loss, optimizer):
     #model.add(Activation("tanh"))
     model.add(Activation("relu"))
     #model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
+    model.add(Dropout(0.0))
+
+    # 3x128x128
+    model.add(Convolution2D(32, 3, 3, border_mode="same"))
+    #model.add(BatchNormalization())
+    #model.add(ELU())
+    #model.add(LeakyReLU(0.33))
+    #model.add(Activation("tanh"))
+    model.add(Activation("relu"))
+    #model.add(MaxPooling2D((2, 2)))
+    model.add(Dropout(0.0))
 
     # 32x64x64
     model.add(Convolution2D(32, 3, 3, border_mode="same"))
