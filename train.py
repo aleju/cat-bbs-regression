@@ -66,7 +66,7 @@ def main():
 
     # create model
     print("Creating model...")
-    model = create_model_c(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
+    model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
 
     # fit
     checkpoint_cb = ModelCheckpoint(SAVE_WEIGHTS_CHECKPOINT_FILEPATH, verbose=1, save_best_only=True)
@@ -307,183 +307,44 @@ def create_model(image_height, image_width, loss, optimizer):
 
     model = Sequential()
 
-     # 3x128x128
+    # 3x128x128
     model.add(Convolution2D(32, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(Convolution2D(32, 3, 3, border_mode="same"))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
-
-    # 32x64x64
-    model.add(Convolution2D(64, 3, 3, border_mode="same"))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(Convolution2D(64, 3, 3, border_mode="same"))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
-
-    # 64x32x32
-    model.add(Convolution2D(128, 3, 3, border_mode="same"))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
-
-    # 128x16x16
-    model.add(Convolution2D(256, 5, 5, border_mode="same"))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
-
-    # 256x8x8 = 16384
-    model.add(Flatten())
-    model.add(Dense(128))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(Dense(4))
-    model.add(Activation("sigmoid"))
-
-    # compile with mean squared error
-    print("Compiling...")
-    model.compile(loss=loss, optimizer=optimizer)
-
-    return model
-
-def create_model_b(image_height, image_width, loss, optimizer):
-    """Creates the cat face locator model.
-
-    Args:
-        image_height: The height of the input images.
-        image_width: The width of the input images.
-        loss: Keras loss function (name or object), e.g. "mse".
-        optimizer: Keras optimizer to use, e.g. Adam() or "sgd".
-    Returns:
-        Sequential
-    """
-
-    model = Sequential()
-
-     # 3x128x128
-    model.add(Convolution2D(32, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
+    model.add(Activation("relu"))
+    model.add(Dropout(0.0))
 
     # 32x128x128
-    model.add(Convolution2D(64, 3, 3, border_mode="same"))
-    model.add(BatchNormalization())
-    model.add(ELU())
+    model.add(Convolution2D(32, 3, 3, border_mode="same"))
+    model.add(Activation("relu"))
+    model.add(Dropout(0.0))
+
+    # 32x128x128
+    model.add(Convolution2D(32, 3, 3, border_mode="same"))
+    model.add(Activation("relu"))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
     # 64x64x64
-    model.add(Convolution2D(128, 3, 3, border_mode="same"))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
-
-    # 128x32x32 = 32768
-    model.add(Flatten())
-    model.add(Dense(128))
-    model.add(BatchNormalization())
-    model.add(ELU())
-    model.add(Dense(4))
-    model.add(Activation("sigmoid"))
-
-    # compile with mean squared error
-    print("Compiling...")
-    model.compile(loss=loss, optimizer=optimizer)
-
-    return model
-
-def create_model_c(image_height, image_width, loss, optimizer):
-    """Creates the cat face locator model.
-
-    Args:
-        image_height: The height of the input images.
-        image_width: The width of the input images.
-        loss: Keras loss function (name or object), e.g. "mse".
-        optimizer: Keras optimizer to use, e.g. Adam() or "sgd".
-    Returns:
-        Sequential
-    """
-
-    model = Sequential()
-
-    # 3x128x128
-    model.add(Convolution2D(32, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
-    #model.add(BatchNormalization())
-    #model.add(ELU())
-    #model.add(LeakyReLU(0.33))
-    #model.add(Activation("tanh"))
-    model.add(Activation("relu"))
-    #model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.0))
-
-    # 3x128x128
-    model.add(Convolution2D(32, 3, 3, border_mode="same"))
-    #model.add(BatchNormalization())
-    #model.add(ELU())
-    #model.add(LeakyReLU(0.33))
-    #model.add(Activation("tanh"))
-    model.add(Activation("relu"))
-    #model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.0))
-
-    # 32x64x64
-    model.add(Convolution2D(32, 3, 3, border_mode="same"))
-    #model.add(BatchNormalization())
-    #model.add(ELU())
-    #model.add(LeakyReLU(0.33))
-    #model.add(Activation("tanh"))
-    model.add(Activation("relu"))
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
-
-    # 64x32x32
     model.add(Convolution2D(64, 3, 3, border_mode="same"))
-    #model.add(BatchNormalization())
-    #model.add(ELU())
-    #model.add(LeakyReLU(0.33))
-    #model.add(Activation("tanh"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
-    # 128x16x16
+    # 128x32x32
     model.add(Convolution2D(128, 3, 3, border_mode="same"))
-    #model.add(BatchNormalization())
-    #model.add(ELU())
-    #model.add(LeakyReLU(0.33))
-    #model.add(Activation("tanh"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
     # 128x16x16
     model.add(Convolution2D(256, 3, 3, border_mode="same"))
-    #model.add(BatchNormalization())
-    #model.add(ELU())
-    #model.add(LeakyReLU(0.33))
-    #model.add(Activation("tanh"))
     model.add(Activation("relu"))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
-    # 128x8x8 = 8192
+    # 256x8x8 = 16384
     model.add(Flatten())
 
     model.add(Dense(256))
-    #model.add(BatchNormalization())
-    #model.add(ELU())
     model.add(Activation("tanh"))
     model.add(Dropout(0.5))
 
