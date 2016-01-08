@@ -3,7 +3,7 @@
 Trains a model to locate cat faces in images (assumes that the image contains a cat face).
 """
 from __future__ import absolute_import, division, print_function
-from dataset import Dataset, ImageWithKeypoints, Keypoints, Rectangle
+from dataset import Dataset
 import numpy as np
 import argparse
 import random
@@ -11,14 +11,10 @@ import os
 from scipy import misc
 from skimage import draw
 from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Activation, Reshape, Flatten
-from keras.layers.advanced_activations import LeakyReLU, ELU
+from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.optimizers import Adam
-from keras.layers.normalization import BatchNormalization
-from keras.regularizers import l2
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.callbacks import ModelCheckpoint
-from keras.utils.generic_utils import Progbar
 
 np.random.seed(42)
 random.seed(42)
@@ -52,12 +48,12 @@ def main():
 
     # load images and labels
     print("Loading images...")
-    X, y = load_Xy(dataset, NB_LOAD_IMAGES, AUGMENTATIONS)
+    X, y = load_xy(dataset, NB_LOAD_IMAGES, AUGMENTATIONS)
 
     # split train and val
     nb_images = X.shape[0]
     nb_train = int(nb_images * (1 - SPLIT))
-    nb_val = nb_images - nb_train
+    #nb_val = nb_images - nb_train
     X_train = X[0:nb_train, ...]
     y_train = y[0:nb_train, ...]
     X_val = X[nb_train:, ...]
@@ -69,7 +65,8 @@ def main():
     model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
 
     # fit
-    checkpoint_cb = ModelCheckpoint(SAVE_WEIGHTS_CHECKPOINT_FILEPATH, verbose=1, save_best_only=True)
+    checkpoint_cb = ModelCheckpoint(SAVE_WEIGHTS_CHECKPOINT_FILEPATH, verbose=1, \
+                                    save_best_only=True)
     model.fit(X_train, y_train, batch_size=BATCH_SIZE, nb_epoch=EPOCHS, validation_split=0.0,
               validation_data=(X_val, y_val), show_accuracy=False,
               callbacks=[checkpoint_cb])
@@ -87,7 +84,7 @@ def main():
             filepath = os.path.join(SAVE_PREDICTIONS_DIR, "%d.png" % (img_idx,))
             misc.imsave(filepath, np.squeeze(img_arr))
 
-def load_Xy(dataset, nb_load, nb_augmentations):
+def load_xy(dataset, nb_load, nb_augmentations):
     """Loads X and y (examples with labels) for the dataset.
     Examples are images.
     Labels are the coordinates of the face rectangles with their half-heights and half-widths
@@ -112,7 +109,8 @@ def load_Xy(dataset, nb_load, nb_augmentations):
             print("Loading image %d of %d..." % (img_idx+1, nb_load))
         image.resize(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)
         image.pad(PADDING)
-        augs = image.augment(AUGMENTATIONS, hflip=True, vflip=False, scale_to_percent=(0.9, 1.1), scale_axis_equally=False,
+        augs = image.augment(AUGMENTATIONS, hflip=True, vflip=False,
+                             scale_to_percent=(0.9, 1.1), scale_axis_equally=False,
                              rotation_deg=10, shear_deg=0, translation_x_px=5, translation_y_px=5,
                              brightness_change=0.1, noise_mean=0.0, noise_std=0.05)
         for aug in [image] + augs:
@@ -136,7 +134,8 @@ def load_Xy(dataset, nb_load, nb_augmentations):
 
     return X, y
 
-def unnormalize_prediction(y, x, half_height, half_width, img_height=MODEL_IMAGE_HEIGHT, img_width=MODEL_IMAGE_WIDTH):
+def unnormalize_prediction(y, x, half_height, half_width, \
+                           img_height=MODEL_IMAGE_HEIGHT, img_width=MODEL_IMAGE_WIDTH):
     """Transforms a predictions from normalized (0 to 1) y, x, half-width,
     half-height to pixel values (top left y, top left x, bottom right y,
     bottom right x).
@@ -200,7 +199,8 @@ def draw_predicted_rectangle(image_arr, y, x, half_height, half_width):
     assert image_arr.shape[0] == 3, str(image_arr.shape)
     height = image_arr.shape[1]
     width = image_arr.shape[2]
-    tl_y, tl_x, br_y, br_x = unnormalize_prediction(y, x, half_height, half_width, img_height=height, img_width=width)
+    tl_y, tl_x, br_y, br_x = unnormalize_prediction(y, x, half_height, half_width, \
+                                                    img_height=height, img_width=width)
     image_arr = np.copy(image_arr) * 255
     image_arr = np.rollaxis(image_arr, 0, 3)
     return draw_rectangle(image_arr, tl_y, tl_x, br_y, br_x)
@@ -263,19 +263,20 @@ def create_model_tiny(image_height, image_width, loss, optimizer):
     model = Sequential()
 
      # 3x128x128
-    model.add(Convolution2D(4, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
-    model.add(ELU())
+    model.add(Convolution2D(4, 3, 3, border_mode="same", \
+                            input_shape=(3, image_height, image_width)))
+    model.add(Activation("relu"))
     model.add(MaxPooling2D((2, 2)))
 
     # 4x64x64
     model.add(Convolution2D(8, 3, 3, border_mode="same"))
-    model.add(ELU())
+    model.add(Activation("relu"))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
     # 8x32x32
     model.add(Convolution2D(16, 3, 3, border_mode="same"))
-    model.add(ELU())
+    model.add(Activation("relu"))
     model.add(MaxPooling2D((2, 2)))
     model.add(Dropout(0.5))
 
@@ -283,7 +284,7 @@ def create_model_tiny(image_height, image_width, loss, optimizer):
     model.add(Flatten())
 
     model.add(Dense(64))
-    model.add(ELU())
+    model.add(Activation("relu"))
     model.add(Dropout(0.5))
 
     model.add(Dense(4))
@@ -308,7 +309,8 @@ def create_model(image_height, image_width, loss, optimizer):
     model = Sequential()
 
     # 3x128x128
-    model.add(Convolution2D(32, 3, 3, border_mode="same", input_shape=(3, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)))
+    model.add(Convolution2D(32, 3, 3, border_mode="same", \
+                            input_shape=(3, image_height, image_width)))
     model.add(Activation("relu"))
     model.add(Dropout(0.0))
 
