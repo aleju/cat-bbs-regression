@@ -16,14 +16,11 @@ import os
 import numpy as np
 import argparse
 import random
-import re
 from scipy import misc
-from scipy import ndimage
 from train import MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, BATCH_SIZE, \
-                  SAVE_WEIGHTS_FILEPATH, create_model, create_model_tiny, \
+                  SAVE_WEIGHTS_CHECKPOINT_FILEPATH, create_model, create_model_tiny, \
                   draw_predicted_rectangle
 from keras.optimizers import Adam
-from ImageAugmenter import ImageAugmenter
 
 np.random.seed(42)
 random.seed(42)
@@ -45,10 +42,13 @@ def main():
     * Marks faces in original images.
     * Saves each marked image.
     """
-    parser = argparse.ArgumentParser(description="Apply a trained cat face locator model to images.")
+    parser = argparse.ArgumentParser(description="Apply a trained cat face locator " \
+                                                  "model to images.")
     parser.add_argument("--dataset", required=True, help="Path to the images directory.")
-    parser.add_argument("--weights", required=False, default="cat_face_locator.best.weights", help="Filepath to the weights of the model.")
-    parser.add_argument("--output", required=False, default="apply_model_output", help="Filepath to the directory in which to save the output.")
+    parser.add_argument("--weights", required=False, default=SAVE_WEIGHTS_CHECKPOINT_FILEPATH,
+                        help="Filepath to the weights of the model.")
+    parser.add_argument("--output", required=False, default="apply_model_output",
+                        help="Filepath to the directory in which to save the output.")
     args = parser.parse_args()
 
     # load images
@@ -71,61 +71,12 @@ def main():
     # predict positions of faces
     preds = model.predict(X, batch_size=BATCH_SIZE)
 
-    # Calculate exact coordinates of faces on original images
-    """
-    coords = []
-    for idx, (y, x, half_height, half_width) in enumerate(preds):
-        orig_height = X[idx].shape[1]
-        orig_width = X[idx].shape[2]
-        tl_y, tl_x, br_y, br_x = unnormalize_prediction(y, x, half_height, half_width, img_height=orig_height, img_width=orig_width)
-
-        coords.append((tl_y, tl_x, br_y, br_x))
-
-    # Save images
-    print("Saving images...")
-    for idx, (tl_y, tl_x, br_y, br_x) in enumerate(coords):
-        print(X.shape, X[idx].shape)
-        img = draw_rectangle(X[idx], tl_y, tl_x, br_y, br_x)
-        filepath = os.path.join(WRITE_TO_DIR, filenames[idx])
-        misc.imsave(filepath, img)
-    """
-
+    # Draw predicted rectangles and save
     print("Saving images...")
     for idx, (y, x, half_height, half_width) in enumerate(preds):
         img = draw_predicted_rectangle(X[idx], y, x, half_height, half_width)
         filepath = os.path.join(WRITE_TO_DIR, filenames[idx])
         misc.imsave(filepath, img)
-
-def get_images2(dirs):
-    """Collects all images in given directories.
-    Args:
-        dirs: List of directories.
-    Returns:
-        List of images (numpy arrays).
-    """
-    paths = get_image_paths(dirs)
-    result = []
-    for path in paths:
-        # neccessary to use ndimage instead of misc.imread, because there are black and white
-        # images and they always get flattened by misc.imread (losing their color dimension)
-        image = ndimage.imread(path, mode="RGB")
-        result.append(image)
-    return result, paths
-
-def get_image_paths2(dirs):
-    """Collects filepaths of all images in given directories.
-    Args:
-        dirs: List of directories.
-    Returns:
-        List of filepaths
-    """
-    result = []
-    for fp_dir in dirs:
-        fps = [f for f in os.listdir(fp_dir) if os.path.isfile(os.path.join(fp_dir, f))]
-        fps = [os.path.join(fp_dir, f) for f in fps]
-        fps_img = [fp for fp in fps if re.match(r".*\.(?:jpg|jpeg|png|gif)$", fp)]
-        result.extend(fps_img)
-    return result
 
 if __name__ == "__main__":
     main()
