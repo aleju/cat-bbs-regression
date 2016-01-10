@@ -13,9 +13,11 @@ Usage:
 from __future__ import division, print_function
 from dataset import Dataset
 import os
+import re
 import numpy as np
 import argparse
 import random
+from scipy import ndimage
 from scipy import misc
 from train import MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, BATCH_SIZE, \
                   SAVE_WEIGHTS_CHECKPOINT_FILEPATH, create_model, create_model_tiny, \
@@ -52,20 +54,21 @@ def main():
     args = parser.parse_args()
 
     # load images
-    dataset = Dataset([args.dataset])
-    filenames = [os.path.basename(fp) for fp in dataset.fps] # will be used during saving
-    nb_images = len(dataset.fps)
+    filepaths = get_image_filepaths([args.dataset])
+    filenames = [os.path.basename(fp) for fp in filepaths] # will be used during saving
+    nb_images = len(filepaths)
     X = np.zeros((nb_images, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, 3), dtype=np.float32)
-    paths = []
-    for i, (fp, image) in enumerate(zip(dataset.fps, dataset.get_images())):
-        #image.square()
-        image.resize(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)
-        X[i] = image.image_arr / 255.0
-        paths.append(fp)
+    for i, fp in enumerate(filepaths):
+        image = ndimage.imread(fp, mode="RGB")
+        image = misc.imresize(image, (MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH))
+        X[i] = image / 255.0
     X = np.rollaxis(X, 3, 1)
 
+    # assure that dataset is not empty
+    assert X.shape[0] > 0, X.shape
+
     # create model
-    model = create_model_tiny(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
+    model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
     model.load_weights(args.weights)
 
     # predict positions of faces
@@ -77,6 +80,20 @@ def main():
         img = draw_predicted_rectangle(X[idx], y, x, half_height, half_width)
         filepath = os.path.join(WRITE_TO_DIR, filenames[idx])
         misc.imsave(filepath, img)
+
+def get_image_filepaths(dirs):
+    """Loads filepaths of images from dataset.
+    Args:
+        dirs    List of directories as strings
+    Returns:
+        List of strings (filepaths)"""
+    result_img = []
+    for fp_dir in dirs:
+        fps = [f for f in os.listdir(fp_dir) if os.path.isfile(os.path.join(fp_dir, f))]
+        fps = [os.path.join(fp_dir, f) for f in fps]
+        fps_img = [fp for fp in fps if re.match(r".*\.jpg$", fp)]
+        result_img.extend(fps_img)
+    return result_img
 
 if __name__ == "__main__":
     main()
