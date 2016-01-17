@@ -53,12 +53,10 @@ def main():
     # split train and val
     nb_images = X.shape[0]
     nb_train = int(nb_images * (1 - SPLIT))
-    #nb_val = nb_images - nb_train
     X_train = X[0:nb_train, ...]
     y_train = y[0:nb_train, ...]
     X_val = X[nb_train:, ...]
     y_val = y[nb_train:, ...]
-    #print(X.shape, X_train.shape, X_val.shape, nb_images, nb_train, nb_val)
 
     # create model
     print("Creating model...")
@@ -115,15 +113,12 @@ def load_xy(dataset, nb_load, nb_augmentations):
                              brightness_change=0.1, noise_mean=0.0, noise_std=0.05)
         for aug in [image] + augs:
             aug.unpad(PADDING)
-            #print(dataset.fps[img_idx])
-            #print(aug.keypoints)
-            #aug.resize(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)
             X[i] = aug.to_array() / 255.0
             face_rect = aug.keypoints.get_rectangle(aug)
             face_rect.normalize(aug)
             center = face_rect.get_center()
-            width = face_rect.get_width()
-            height = face_rect.get_height()
+            width = face_rect.get_width() / 2
+            height = face_rect.get_height() / 2
             y[i] = [center.y, center.x, height, width]
             i += 1
 
@@ -246,53 +241,6 @@ def clip(lower, val, upper):
         return upper
     else:
         return val
-
-def create_model_tiny(image_height, image_width, loss, optimizer):
-    """Creates the tiny version of the cat face locator model.
-    This is useful for debugging, because it doesn't take as much theano compile time.
-
-    Args:
-        image_height: The height of the input images.
-        image_width: The width of the input images.
-        loss: Keras loss function (name or object), e.g. "mse".
-        optimizer: Keras optimizer to use, e.g. Adam() or "sgd".
-    Returns:
-        Sequential
-    """
-
-    model = Sequential()
-
-     # 3x128x128
-    model.add(Convolution2D(4, 3, 3, border_mode="same", \
-                            input_shape=(3, image_height, image_width)))
-    model.add(Activation("relu"))
-    model.add(MaxPooling2D((2, 2)))
-
-    # 4x64x64
-    model.add(Convolution2D(8, 3, 3, border_mode="same"))
-    model.add(Activation("relu"))
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
-
-    # 8x32x32
-    model.add(Convolution2D(16, 3, 3, border_mode="same"))
-    model.add(Activation("relu"))
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Dropout(0.5))
-
-    # 16x16x16 = 4096
-    model.add(Flatten())
-
-    model.add(Dense(64))
-    model.add(Activation("relu"))
-    model.add(Dropout(0.5))
-
-    model.add(Dense(4))
-    model.add(Activation("sigmoid"))
-
-    print("Compiling...")
-    model.compile(loss=loss, optimizer=optimizer)
-    return model
 
 def create_model(image_height, image_width, loss, optimizer):
     """Creates the cat face locator model.
