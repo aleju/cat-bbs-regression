@@ -40,10 +40,9 @@ def main():
     parser.add_argument("--dataset", required=True, help="Path to your 10k cats dataset directory")
     args = parser.parse_args()
 
+    # initialize dataset
     subdir_names = ["CAT_00", "CAT_01", "CAT_02", "CAT_03", "CAT_04", "CAT_05", "CAT_06"]
     subdirs = [os.path.join(args.dataset, subdir) for subdir in subdir_names]
-
-    # initialize dataset
     dataset = Dataset(subdirs)
 
     # load images and labels
@@ -107,7 +106,7 @@ def load_xy(dataset, nb_load, nb_augmentations):
             print("Loading image %d of %d..." % (img_idx+1, nb_load))
         image.resize(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)
         image.pad(PADDING)
-        augs = image.augment(AUGMENTATIONS, hflip=True, vflip=False,
+        augs = image.augment(nb_augmentations, hflip=True, vflip=False,
                              scale_to_percent=(0.9, 1.1), scale_axis_equally=False,
                              rotation_deg=10, shear_deg=0, translation_x_px=5, translation_y_px=5,
                              brightness_change=0.1, noise_mean=0.0, noise_std=0.05)
