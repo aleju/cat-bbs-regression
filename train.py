@@ -121,8 +121,8 @@ def load_xy(dataset, nb_load, nb_augmentations):
             y[i] = [center.y, center.x, height, width]
             i += 1
 
-        if (img_idx + 1) >= nb_load:
-            break
+            if i >= nb_images:
+                break
 
     X = np.rollaxis(X, 3, 1)
 
