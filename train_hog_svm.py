@@ -63,19 +63,16 @@ def load_xy(dataset, nb_load, nb_augmentations):
                              brightness_change=0.1, noise_mean=0.0, noise_std=0.05)
         for aug in [image] + augs:
             aug.unpad(PADDING)
-            for crop, contains_cat in create_crops(aug):
+            for crop, face_factor in create_crops(aug):
                 crop_hog = hog(crop, orientations=8, pixels_per_cell=(16, 16),
                                cells_per_block=(1, 1), normalize=True, feature_vector=True,
                                visualise=False)
                 X[i] = crop_hog
-                y[i] = 1 if contains_cat else 0
+                y[i] = 1 if face_factor >= 0.2 else 0
+                i += 1
 
-            X[i] = aug.to_array() / 255.0
-
-            i += 1
-
-        if (img_idx + 1) >= nb_load:
-            break
+                if (i + 1) >= nb_images:
+                    break
 
     X = np.rollaxis(X, 3, 1)
 
@@ -83,17 +80,33 @@ def load_xy(dataset, nb_load, nb_augmentations):
 
 def create_crops(img):
     from skimage import color
-    img = color.rgb2gray(img)
-    for :
-        crop = img.to_array()[???]
-        face_rect = aug.keypoints.get_rectangle(aug)
-        face_rect.normalize(aug)
-        center = face_rect.get_center()
-        width = face_rect.get_width() / 2
-        height = face_rect.get_height() / 2
-        y[i] = [center.y, center.x, height, width]
 
-        yield crop, contains_cat
+    img_arr = color.rgb2gray(img.to_array())
+    img_face = np.zeros(img_arr.shape, dtype=np.boolean)
+
+    face_rect = img.keypoints.get_rectangle(img)
+    rect_tl = face_rect.tl_y
+    img_face[face_rect.tl_y:face_rect.br_y+1, face_rect.tl_x:face_rect.br_x+1] = 1
+
+    nb_crops_y = floor(MODEL_IMAGE_HEIGHT / CROP_HEIGHT)
+    nb_crops_x = floor(MODEL_IMAGE_WIDTH / CROP_WIDTH)
+    nb_crops = nb_crops_y * nb_crops_x
+
+    for i in range(nb_crops):
+        grid_y = i // nb_crops_x
+        grid_x = i % nb_crops_x
+
+        crop_tl_y = MODEL_IMAGE_HEIGHT * (CROP_HEIGHT * grid_y)
+        crop_br_y = MODEL_IMAGE_HEIGHT * (CROP_HEIGHT * (grid_y + 1))
+        crop_tl_x = MODEL_IMAGE_WIDTH * (CROP_WIDTH * grid_x)
+        crop_br_x = MODEL_IMAGE_WIDTH * (CROP_WIDTH * (grid_y + 1))
+
+        img_arr_crop = img_arr[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
+        img_face_crop = img_face[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
+        face_px = np.nonzero(img_face_crop)
+        face_factor = face_px / (CROP_HEIGHT * CROP_WIDTH)
+
+        yield img_arr_crop, face_factor
 
 if __name__ == "__main__":
     main()
