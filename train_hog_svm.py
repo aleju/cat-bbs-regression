@@ -4,15 +4,18 @@ import numpy as np
 import argparse
 import random
 import os
+from skimage import color
+from sklearn.svm import SVC
 
 np.random.seed(42)
 random.seed(42)
 
+SPLIT = 0.1
 MODEL_IMAGE_HEIGHT = 256
 MODEL_IMAGE_WIDTH = 256
 CROP_HEIGHT = 32
 CROP_WIDTH = 32
-NB_LOAD_IMAGES = 5000
+NB_LOAD_IMAGES = 2000
 
 def main():
     # initialize dataset
@@ -22,7 +25,7 @@ def main():
 
     # load images and labels
     print("Loading images...")
-    X, y = load_xy(dataset, NB_LOAD_IMAGES)
+    X, y = load_xy(dataset, NB_LOAD_IMAGES, 0)
 
     # split train and val
     nb_images = X.shape[0]
@@ -31,6 +34,14 @@ def main():
     y_train = y[0:nb_train, ...]
     X_val = X[nb_train:, ...]
     y_val = y[nb_train:, ...]
+
+    print("Training...")
+    svc = SVC()
+    svc.fit(X_train, y_train)
+
+    print("Scoring...")
+    acc = svc.score(X_val, y_val)
+    print("accuracy = %.4f" % (acc))
 
 def load_xy(dataset, nb_load, nb_augmentations):
     """Loads X and y (examples with labels) for the dataset.
@@ -79,8 +90,6 @@ def load_xy(dataset, nb_load, nb_augmentations):
     return X, y
 
 def create_crops(img):
-    from skimage import color
-
     img_arr = color.rgb2gray(img.to_array())
     img_face = np.zeros(img_arr.shape, dtype=np.boolean)
 
