@@ -1,3 +1,11 @@
+"""
+Script to train an SVM classifier to locate cat faces in images.
+The classifiers training data consists of HOGs of crops of images (windows).
+It has to predict 1 (contains cat) whenever the fraction of pixels that
+show a cat (in a window) is above a threshold (20 percent by default).
+Usage:
+    python train_hog_svm.py --dataset="/path/to/images-directory"
+"""
 from __future__ import absolute_import, division, print_function
 from dataset import Dataset
 import numpy as np
@@ -16,8 +24,14 @@ MODEL_IMAGE_WIDTH = 256
 CROP_HEIGHT = 32
 CROP_WIDTH = 32
 NB_LOAD_IMAGES = 2000
+CAT_FRACTION_THRESHOLD = 0.2
 
 def main():
+    """Load images, train classifier, score classifier."""
+    parser = argparse.ArgumentParser(description="Train an SVM model to locate cat faces in images.")
+    parser.add_argument("--dataset", required=True, help="Path to your 10k cats dataset directory")
+    args = parser.parse_args()
+
     # initialize dataset
     subdir_names = ["CAT_00", "CAT_01", "CAT_02", "CAT_03", "CAT_04", "CAT_05", "CAT_06"]
     subdirs = [os.path.join(args.dataset, subdir) for subdir in subdir_names]
@@ -26,6 +40,9 @@ def main():
     # load images and labels
     print("Loading images...")
     X, y = load_xy(dataset, NB_LOAD_IMAGES, 0)
+    assert X.dtype == np.float32
+    assert np.max(X) <= 1.0
+    assert np.min(X) >= 0.0
 
     # split train and val
     nb_images = X.shape[0]
@@ -79,7 +96,7 @@ def load_xy(dataset, nb_load, nb_augmentations):
                                cells_per_block=(1, 1), normalize=True, feature_vector=True,
                                visualise=False)
                 X[i] = crop_hog
-                y[i] = 1 if face_factor >= 0.2 else 0
+                y[i] = 1 if face_factor >= CAT_FRACTION_THRESHOLD else 0
                 i += 1
 
                 if (i + 1) >= nb_images:
@@ -90,6 +107,12 @@ def load_xy(dataset, nb_load, nb_augmentations):
     return X, y
 
 def create_crops(img):
+    """Extracts all 32x32 crops from a given image.
+    Args:
+        img     The image to crop
+    Returns:
+        Generator of (crop as numpy array, cat fraction as float 0.0 to 1.0)
+    """
     img_arr = color.rgb2gray(img.to_array())
     img_face = np.zeros(img_arr.shape, dtype=np.boolean)
 
@@ -97,18 +120,20 @@ def create_crops(img):
     rect_tl = face_rect.tl_y
     img_face[face_rect.tl_y:face_rect.br_y+1, face_rect.tl_x:face_rect.br_x+1] = 1
 
-    nb_crops_y = floor(MODEL_IMAGE_HEIGHT / CROP_HEIGHT)
-    nb_crops_x = floor(MODEL_IMAGE_WIDTH / CROP_WIDTH)
+    height = img.shape[0]
+    width = img.shape[1]
+    nb_crops_y = floor(height / CROP_HEIGHT)
+    nb_crops_x = floor(width / CROP_WIDTH)
     nb_crops = nb_crops_y * nb_crops_x
 
     for i in range(nb_crops):
         grid_y = i // nb_crops_x
         grid_x = i % nb_crops_x
 
-        crop_tl_y = MODEL_IMAGE_HEIGHT * (CROP_HEIGHT * grid_y)
-        crop_br_y = MODEL_IMAGE_HEIGHT * (CROP_HEIGHT * (grid_y + 1))
-        crop_tl_x = MODEL_IMAGE_WIDTH * (CROP_WIDTH * grid_x)
-        crop_br_x = MODEL_IMAGE_WIDTH * (CROP_WIDTH * (grid_y + 1))
+        crop_tl_y = height * (CROP_HEIGHT * grid_y)
+        crop_br_y = height * (CROP_HEIGHT * (grid_y + 1))
+        crop_tl_x = width * (CROP_WIDTH * grid_x)
+        crop_br_x = width * (CROP_WIDTH * (grid_y + 1))
 
         img_arr_crop = img_arr[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
         img_face_crop = img_face[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
