@@ -13,6 +13,7 @@ import argparse
 import random
 import os
 from skimage import color
+from skimage.feature import hog
 from sklearn.svm import SVC
 
 np.random.seed(42)
@@ -25,6 +26,7 @@ CROP_HEIGHT = 32
 CROP_WIDTH = 32
 NB_LOAD_IMAGES = 2000
 CAT_FRACTION_THRESHOLD = 0.2
+PADDING = 20
 
 def main():
     """Load images, train classifier, score classifier."""
@@ -74,10 +76,11 @@ def load_xy(dataset, nb_load, nb_augmentations):
         y (numpy array of shape (N, 1))
     """
     i = 0
-    nb_crops_per_image = floor(MODEL_IMAGE_HEIGHT / CROP_HEIGHT) * floor(MODEL_IMAGE_WIDTH / CROP_WIDTH)
+    nb_crops_per_image = (MODEL_IMAGE_HEIGHT // CROP_HEIGHT) * (MODEL_IMAGE_WIDTH // CROP_WIDTH)
     nb_load = min(nb_load, len(dataset.fps) * nb_crops_per_image)
     nb_images = nb_load + nb_load * nb_augmentations
-    X = np.zeros((nb_images, CROP_HEIGHT, CROP_WIDTH), dtype=np.float32)
+    #X = np.zeros((nb_images, CROP_HEIGHT, CROP_WIDTH), dtype=np.float32)
+    X = np.zeros((nb_images, 2048), dtype=np.float32)
     y = np.zeros((nb_images, 1), dtype=np.float32)
 
     for img_idx, image in enumerate(dataset.get_images()):
@@ -92,8 +95,9 @@ def load_xy(dataset, nb_load, nb_augmentations):
         for aug in [image] + augs:
             aug.unpad(PADDING)
             for crop, face_factor in create_crops(aug):
+                print(crop.shape)
                 crop_hog = hog(crop, orientations=8, pixels_per_cell=(16, 16),
-                               cells_per_block=(1, 1), normalize=True, feature_vector=True,
+                               cells_per_block=(1, 1), normalise=True, #feature_vector=True,
                                visualise=False)
                 X[i] = crop_hog
                 y[i] = 1 if face_factor >= CAT_FRACTION_THRESHOLD else 0
@@ -114,16 +118,16 @@ def create_crops(img):
         Generator of (crop as numpy array, cat fraction as float 0.0 to 1.0)
     """
     img_arr = color.rgb2gray(img.to_array())
-    img_face = np.zeros(img_arr.shape, dtype=np.boolean)
+    img_face = np.zeros(img_arr.shape, dtype=np.bool_)
 
     face_rect = img.keypoints.get_rectangle(img)
     rect_tl = face_rect.tl_y
     img_face[face_rect.tl_y:face_rect.br_y+1, face_rect.tl_x:face_rect.br_x+1] = 1
 
-    height = img.shape[0]
-    width = img.shape[1]
-    nb_crops_y = floor(height / CROP_HEIGHT)
-    nb_crops_x = floor(width / CROP_WIDTH)
+    height = img_arr.shape[0]
+    width = img_arr.shape[1]
+    nb_crops_y = height // CROP_HEIGHT
+    nb_crops_x = width // CROP_WIDTH
     nb_crops = nb_crops_y * nb_crops_x
 
     for i in range(nb_crops):
@@ -137,7 +141,7 @@ def create_crops(img):
 
         img_arr_crop = img_arr[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
         img_face_crop = img_face[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
-        face_px = np.nonzero(img_face_crop)
+        face_px = np.count_nonzero(img_face_crop)
         face_factor = face_px / (CROP_HEIGHT * CROP_WIDTH)
 
         yield img_arr_crop, face_factor
