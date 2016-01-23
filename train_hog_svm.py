@@ -24,7 +24,7 @@ MODEL_IMAGE_HEIGHT = 256
 MODEL_IMAGE_WIDTH = 256
 CROP_HEIGHT = 32
 CROP_WIDTH = 32
-NB_LOAD_IMAGES = 2000
+NB_LOAD_IMAGES = 20000
 CAT_FRACTION_THRESHOLD = 0.2
 PADDING = 20
 
@@ -75,17 +75,16 @@ def load_xy(dataset, nb_load, nb_augmentations):
         X (numpy array of shape (N, 32*32=1024)),
         y (numpy array of shape (N, 1))
     """
-    i = 0
     nb_crops_per_image = (MODEL_IMAGE_HEIGHT // CROP_HEIGHT) * (MODEL_IMAGE_WIDTH // CROP_WIDTH)
     nb_load = min(nb_load, len(dataset.fps) * nb_crops_per_image)
-    nb_images = nb_load + nb_load * nb_augmentations
+    nb_crops = nb_load + nb_load * nb_augmentations
     #X = np.zeros((nb_images, CROP_HEIGHT, CROP_WIDTH), dtype=np.float32)
-    X = np.zeros((nb_images, 2048), dtype=np.float32)
-    y = np.zeros((nb_images, 1), dtype=np.float32)
+    X = np.zeros((nb_crops, 32), dtype=np.float32)
+    y = np.zeros((nb_crops,), dtype=np.float32)
 
+    print("nb_crops_per_image=", nb_crops_per_image, "nb_load=", nb_load, "nb_crops=", nb_crops)
+    nb_crops_added = 0
     for img_idx, image in enumerate(dataset.get_images()):
-        if img_idx % 100 == 0:
-            print("Loading image %d of %d..." % (img_idx+1, nb_load))
         image.resize(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH)
         image.pad(PADDING)
         augs = image.augment(nb_augmentations, hflip=True, vflip=False,
@@ -95,18 +94,24 @@ def load_xy(dataset, nb_load, nb_augmentations):
         for aug in [image] + augs:
             aug.unpad(PADDING)
             for crop, face_factor in create_crops(aug):
-                print(crop.shape)
+                if nb_crops_added % 100 == 0:
+                    print("Adding crop %d of %d..." % (nb_crops_added+1, nb_crops))
+
+                #print(crop.shape)
                 crop_hog = hog(crop, orientations=8, pixels_per_cell=(16, 16),
                                cells_per_block=(1, 1), normalise=True, #feature_vector=True,
                                visualise=False)
-                X[i] = crop_hog
-                y[i] = 1 if face_factor >= CAT_FRACTION_THRESHOLD else 0
-                i += 1
+                crop_hog[crop_hog < 0] = 0 # the hog values can rarely end up slightly below 0
+                X[nb_crops_added] = crop_hog
+                y[nb_crops_added] = 1 if face_factor >= CAT_FRACTION_THRESHOLD else 0
+                nb_crops_added += 1
 
-                if (i + 1) >= nb_images:
+                if nb_crops_added >= nb_crops:
                     break
-
-    X = np.rollaxis(X, 3, 1)
+            if nb_crops_added >= nb_crops:
+                break
+        if nb_crops_added >= nb_crops:
+            break
 
     return X, y
 
@@ -130,21 +135,29 @@ def create_crops(img):
     nb_crops_x = width // CROP_WIDTH
     nb_crops = nb_crops_y * nb_crops_x
 
-    for i in range(nb_crops):
-        grid_y = i // nb_crops_x
-        grid_x = i % nb_crops_x
+    crop_tl_y = 0
+    for grid_y in range(nb_crops_y):
+        crop_tl_x = 0
+        for grid_x in range(nb_crops_x):
+            #grid_y = i // nb_crops_x
+            #grid_x = i % nb_crops_x
 
-        crop_tl_y = height * (CROP_HEIGHT * grid_y)
-        crop_br_y = height * (CROP_HEIGHT * (grid_y + 1))
-        crop_tl_x = width * (CROP_WIDTH * grid_x)
-        crop_br_x = width * (CROP_WIDTH * (grid_y + 1))
+            #crop_tl_y = height * (CROP_HEIGHT * grid_y)
+            #crop_br_y = height * (CROP_HEIGHT * (grid_y + 1))
+            #crop_tl_x = width * (CROP_WIDTH * grid_x)
+            #crop_br_x = width * (CROP_WIDTH * (grid_y + 1))
+            crop_br_y = crop_tl_y + CROP_HEIGHT
+            crop_br_x = crop_tl_x + CROP_WIDTH
 
-        img_arr_crop = img_arr[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
-        img_face_crop = img_face[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
-        face_px = np.count_nonzero(img_face_crop)
-        face_factor = face_px / (CROP_HEIGHT * CROP_WIDTH)
+            img_arr_crop = img_arr[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
+            img_face_crop = img_face[crop_tl_y:crop_br_y, crop_tl_x:crop_br_x]
+            face_px = np.count_nonzero(img_face_crop)
+            face_factor = face_px / (CROP_HEIGHT * CROP_WIDTH)
 
-        yield img_arr_crop, face_factor
+            yield img_arr_crop, face_factor
+
+            crop_tl_x += CROP_WIDTH
+        crop_tl_y += CROP_HEIGHT
 
 if __name__ == "__main__":
     main()
