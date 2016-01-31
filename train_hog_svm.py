@@ -22,8 +22,8 @@ random.seed(42)
 SPLIT = 0.1
 MODEL_IMAGE_HEIGHT = 512
 MODEL_IMAGE_WIDTH = 512
-CROP_HEIGHT = 64
-CROP_WIDTH = 64
+CROP_HEIGHT = 128
+CROP_WIDTH = 128
 NB_LOAD_IMAGES = 60000
 CAT_FRACTION_THRESHOLD = 0.4
 PADDING = 20
@@ -56,7 +56,7 @@ def main():
     print("%d of %d values in y_train are 1, %d of %d values in y_val" % (np.count_nonzero(y_train), y_train.shape[0], np.count_nonzero(y_val), y_val.shape[0]))
 
     print("Training...")
-    svc = SVC(C=0.0001)
+    svc = SVC(C=0.001)
     svc.fit(X_train, y_train)
 
     print("Predictions...")
@@ -85,7 +85,7 @@ def load_xy(dataset, nb_load, nb_augmentations):
     nb_load = min(nb_load, len(dataset.fps) * nb_crops_per_image)
     nb_crops = nb_load + nb_load * nb_augmentations
     #X = np.zeros((nb_images, CROP_HEIGHT, CROP_WIDTH), dtype=np.float32)
-    X = np.zeros((nb_crops, 3724), dtype=np.float32)
+    X = np.zeros((nb_crops, 8100), dtype=np.float32)
     y = np.zeros((nb_crops,), dtype=np.float32)
 
     #print("nb_crops_per_image=", nb_crops_per_image, "nb_load=", nb_load, "nb_crops=", nb_crops)
@@ -104,9 +104,8 @@ def load_xy(dataset, nb_load, nb_augmentations):
                     print("Adding crop %d of %d..." % (nb_crops_added+1, nb_crops))
 
                 #print(crop.shape)
-                crop_hog, vis = hog(crop, orientations=19, pixels_per_cell=(8, 8),
-                               cells_per_block=(2, 2), normalise=True, #feature_vector=True,
-                               visualise=True)
+                crop_hog = hog(crop, orientations=9, pixels_per_cell=(8, 8), cells_per_block=(2, 2), normalise=True)
+                #crop_hog, vis = hog(crop, orientations=9, pixels_per_cell=(8, 8), cells_per_block=(2, 2), normalise=True, visualise=True)
                 #from scipy import misc
                 #misc.imshow(crop)
                 #misc.imshow(vis)
