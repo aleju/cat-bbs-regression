@@ -21,12 +21,13 @@ random.seed(42)
 
 MODEL_IMAGE_HEIGHT = 512
 MODEL_IMAGE_WIDTH = 512
-CROP_HEIGHT = 32
-CROP_WIDTH = 32
-NB_CROPS = 7500
-NB_VALIDATION = 512
+CROP_HEIGHT = 64
+CROP_WIDTH = 64
+NB_CROPS = 30000
+NB_VALIDATION = 1024
 NB_AUGMENTATIONS = 0
-CAT_FRACTION_THRESHOLD = 0.5
+NB_CROPS_PER_IMAGE = 10 # max
+CAT_FRACTION_THRESHOLD = 0.8
 
 def main():
     """Load images, train classifier, score classifier."""
@@ -54,7 +55,8 @@ def main():
     print(y_train.shape, y_val.shape)
 
     print("Training...")
-    svc = SVC(C=0.001)
+    # class_weight="balanced" for sklearn 0.18+
+    svc = SVC(C=0.00001, class_weight="auto")
     svc.fit(X_train, y_train)
 
     print("Predictions...")
@@ -71,6 +73,7 @@ def load_xy(dataset, nb_crops_max, nb_augmentations):
     y = []
 
     examples = get_crops_with_labels(dataset, nb_crops_max, nb_augmentations,
+                                     nb_crops_per_image=NB_CROPS_PER_IMAGE,
                                      model_image_height=MODEL_IMAGE_HEIGHT,
                                      model_image_width=MODEL_IMAGE_WIDTH,
                                      crop_height=CROP_HEIGHT, crop_width=CROP_WIDTH)
@@ -79,8 +82,8 @@ def load_xy(dataset, nb_crops_max, nb_augmentations):
         if i % 100 == 0:
             print("Crop %d of %d" % (i+1, nb_crops_max))
 
-        distances = [1, 3, 5, 7]
-        angles = [0*np.pi/3, 1*np.pi/3, 2*np.pi/3, 3*np.pi/3]
+        distances = [1, 2, 3, 4, 5, 7, 11]
+        angles = [0*np.pi, 0.25*np.pi, 0.5*np.pi, 0.75*np.pi, 1.0*np.pi, 1.25*np.pi, 1.5*np.pi, 1.75*np.pi]
         glcm = greycomatrix(crop, distances, angles, 256, symmetric=True, normed=True)
         dissimilarities = greycoprops(glcm, 'dissimilarity')
         energies = greycoprops(glcm, 'energy')
@@ -104,7 +107,15 @@ def load_xy(dataset, nb_crops_max, nb_augmentations):
     X = np.array(X, dtype=np.float32)
     y = np.array(y, dtype=np.float32)
 
+    X = scale_linear_bycolumn(X)
+
     return X, y
+
+def scale_linear_bycolumn(rawpoints, low=0.0, high=1.0):
+    mins = np.min(rawpoints, axis=0)
+    maxs = np.max(rawpoints, axis=0)
+    rng = maxs - mins
+    return high - (((high - low) * (maxs - rawpoints)) / rng)
 
 if __name__ == "__main__":
     main()

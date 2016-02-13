@@ -14,17 +14,18 @@ import random
 import os
 from skimage import color
 from skimage.feature import hog
-from sklearn.svm import SVC
+from sklearn.svm import SVC, SVR
 
 np.random.seed(42)
 random.seed(42)
 
-SPLIT = 0.1
 MODEL_IMAGE_HEIGHT = 512
 MODEL_IMAGE_WIDTH = 512
 CROP_HEIGHT = 128
 CROP_WIDTH = 128
-NB_LOAD_IMAGES = 60000
+NB_CROPS = 50000
+NB_AUGMENTATIONS = 0
+NB_VALIDATION = 1024
 CAT_FRACTION_THRESHOLD = 0.4
 PADDING = 20
 
@@ -41,28 +42,33 @@ def main():
 
     # load images and labels
     print("Loading images...")
-    X, y = load_xy(dataset, NB_LOAD_IMAGES, 0)
+    X, y = load_xy(dataset, NB_CROPS, NB_AUGMENTATIONS)
     assert X.dtype == np.float32
     assert np.max(X) <= 1.0
     assert np.min(X) >= 0.0
 
     # split train and val
+    """
     nb_images = X.shape[0]
     nb_train = int(nb_images * (1 - SPLIT))
     X_train = X[0:nb_train, ...]
     y_train = y[0:nb_train, ...]
     X_val = X[nb_train:, ...]
     y_val = y[nb_train:, ...]
+    """
+    X_val, X_train = X[0:NB_VALIDATION, ...], X[NB_VALIDATION:, ...]
+    y_val, y_train = y[0:NB_VALIDATION, ...], y[NB_VALIDATION:, ...]
     print("%d of %d values in y_train are 1, %d of %d values in y_val" % (np.count_nonzero(y_train), y_train.shape[0], np.count_nonzero(y_val), y_val.shape[0]))
 
     print("Training...")
-    svc = SVC(C=0.001)
+    #svc = SVC(C=0.1, class_weight="auto", kernel="poly")
+    svc = SVR(C=0.1, verbose=True)
     svc.fit(X_train, y_train)
 
     print("Predictions...")
     preds = svc.predict(X_val)
     for i in range(preds.shape[0]):
-        print(i, preds[i])
+        print("%d: pred=%.2f, label=%.2f" % (i, preds[i], y_val[i]))
 
     print("Scoring...")
     acc = svc.score(X_val, y_val)
@@ -70,7 +76,7 @@ def main():
 
 def load_xy(dataset, nb_crops_max, nb_augmentations):
     """Loads X and y (examples with labels) for the dataset.
-    Examples are HOGs of 32x32 crops of 256x256 images.
+    Examples are HOGs of patches in example images.
     Labels are 0/1 whether the crop contains a cat.
 
     Args:
@@ -90,7 +96,7 @@ def load_xy(dataset, nb_crops_max, nb_augmentations):
 
     #print("nb_crops_per_image=", nb_crops_per_image, "nb_load=", nb_load, "nb_crops=", nb_crops)
     nb_crops_added = 0
-    for i, (crop, face_factor) in enumerate(get_examples_with_labels(dataset, nb_crops_max, nb_augmentations)):
+    for i, (crop, face_factor) in enumerate(get_crops_with_labels(dataset, nb_crops_max, nb_augmentations, nb_crops_per_image=16)):
         if nb_crops_added % 100 == 0:
             print("Crop %d of %d" % (nb_crops_added+1, nb_crops_max))
         crop_hog = hog(crop, orientations=9, pixels_per_cell=(8, 8), cells_per_block=(2, 2), normalise=True)
@@ -102,18 +108,20 @@ def load_xy(dataset, nb_crops_max, nb_augmentations):
         is_cat = True if face_factor >= CAT_FRACTION_THRESHOLD else False
         #if is_cat or random.random() < 0.25:
         X[nb_crops_added] = crop_hog
-        y[nb_crops_added] = 1 if is_cat else 0
+        #y[nb_crops_added] = 1 if is_cat else 0
+        y[nb_crops_added] = face_factor
         nb_crops_added += 1
 
     return X, y
 
-def get_examples_with_labels(dataset, nb_crops_max, nb_augmentations,
-                             model_image_height=MODEL_IMAGE_HEIGHT,
-                             model_image_width=MODEL_IMAGE_WIDTH,
-                             crop_height=CROP_HEIGHT,
-                             crop_width=CROP_WIDTH,
-                             padding=PADDING,
-                             drop_nonface_prob=0.0):
+def get_crops_with_labels(dataset, nb_crops_max, nb_augmentations,
+                          nb_crops_per_image=None,
+                          model_image_height=MODEL_IMAGE_HEIGHT,
+                          model_image_width=MODEL_IMAGE_WIDTH,
+                          crop_height=CROP_HEIGHT,
+                          crop_width=CROP_WIDTH,
+                          padding=PADDING,
+                          drop_nonface_prob=0.0):
     """Loads X and y (examples with labels) for the dataset.
     Examples are HOGs of 32x32 crops of 256x256 images.
     Labels are 0/1 whether the crop contains a cat.
@@ -129,6 +137,14 @@ def get_examples_with_labels(dataset, nb_crops_max, nb_augmentations,
     nb_crops_loaded = 0
     for img_idx, image in enumerate(dataset.get_images()):
         image.resize(model_image_height, model_image_width)
+        #print(image.image_arr)
+        image.grayscale()
+        #from scipy import misc
+        #misc.imshow(image.image_arr)
+        image.equalize()
+        #print(image.image_arr)
+        #from scipy import misc
+        #misc.imshow(image.image_arr)
         image.pad(padding)
         augs = image.augment(nb_augmentations, hflip=True, vflip=False,
                              scale_to_percent=(0.9, 1.1), scale_axis_equally=False,
@@ -136,7 +152,7 @@ def get_examples_with_labels(dataset, nb_crops_max, nb_augmentations,
                              brightness_change=0.1, noise_mean=0.0, noise_std=0.05)
         for aug in [image] + augs:
             aug.unpad(padding)
-            for crop, face_factor in image_to_crops(aug, crop_height, crop_width):
+            for crop, face_factor in image_to_crops(aug, crop_height, crop_width, nb_crops_max=nb_crops_per_image):
                 if drop_nonface_prob == 0.0 or random.random() > drop_nonface_prob:
                     yield crop, face_factor
                     nb_crops_loaded += 1
@@ -149,7 +165,7 @@ def get_examples_with_labels(dataset, nb_crops_max, nb_augmentations,
             break
 
 
-def image_to_crops(img, crop_height, crop_width):
+def image_to_crops(img, crop_height, crop_width, nb_crops_max):
     """Extracts all NxM grayscale crops (patches) from a given image.
     Args:
         img         The image to crop
@@ -171,6 +187,7 @@ def image_to_crops(img, crop_height, crop_width):
     nb_crops_x = width // crop_width
     nb_crops = nb_crops_y * nb_crops_x
 
+    crops = []
     crop_tl_y = 0
     for grid_y in range(nb_crops_y):
         crop_tl_x = 0
@@ -183,10 +200,20 @@ def image_to_crops(img, crop_height, crop_width):
             face_px = np.count_nonzero(img_face_crop)
             face_factor = face_px / (crop_height * crop_width)
 
-            yield img_arr_crop, face_factor
+            crops.append((img_arr_crop, face_factor))
 
             crop_tl_x += crop_width
         crop_tl_y += crop_height
+
+    nb_crops_max = nb_crops_max if nb_crops_max is not None else len(crops)
+
+    if nb_crops_max >= len(crops):
+        crops_result = crops
+    else:
+        crops_result = random.sample(crops, nb_crops_max)
+
+    for img_arr_crop, face_factor in crops_result:
+        yield img_arr_crop, face_factor
 
 if __name__ == "__main__":
     main()
