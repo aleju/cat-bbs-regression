@@ -26,6 +26,7 @@ import numpy as np
 from ImageAugmenter import create_aug_matrices
 from skimage import transform as tf
 from skimage import color
+from skimage import exposure
 
 WARP_KEYPOINTS_MODE = "constant"
 WARP_KEYPOINTS_CVAL = 0.0
@@ -142,6 +143,13 @@ class ImageWithKeypoints(object):
         """Converts the image to grayscale."""
         self.image_arr = color.rgb2gray(self.image_arr)
 
+    def equalize(self):
+        """Perform adaptive histogram equalization."""
+        self.image_arr = exposure.equalize_adapthist(self.image_arr, clip_limit=0.03)
+        self.image_arr = self.image_arr * 256
+        self.image_arr = np.clip(self.image_arr, 0, 255)
+        self.image_arr = self.image_arr.astype(np.uint8)
+
     def pad(self, nb_pixels, mode="median"):
         """Adds in-place N pixels to the sides of the image.
         Args:
@@ -152,10 +160,15 @@ class ImageWithKeypoints(object):
         nb_bottom = nb_pixels
         nb_left = nb_pixels
         nb_right = nb_pixels
-        self.image_arr = np.pad(self.image_arr, ((nb_top, nb_bottom), \
-                                                 (nb_left, nb_right), \
-                                                 (0, 0)), \
-                                                 mode=mode)
+        if len(self.image_arr.shape) == 2:
+            self.image_arr = np.pad(self.image_arr, ((nb_top, nb_bottom), \
+                                                     (nb_left, nb_right)), \
+                                                     mode=mode)
+        else:
+            self.image_arr = np.pad(self.image_arr, ((nb_top, nb_bottom), \
+                                                     (nb_left, nb_right), \
+                                                     (0, 0)), \
+                                                     mode=mode)
         self.keypoints.shift_y(nb_top, self)
         self.keypoints.shift_x(nb_left, self)
 
