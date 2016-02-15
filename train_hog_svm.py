@@ -153,7 +153,7 @@ def get_crops_with_labels(dataset, nb_crops_max, nb_augmentations,
         for aug in [image] + augs:
             aug.unpad(padding)
             for crop, face_factor in image_to_crops(aug, crop_height, crop_width, nb_crops_max=nb_crops_per_image):
-                if drop_nonface_prob == 0.0 or random.random() > drop_nonface_prob:
+                if face_factor > 0.15 or drop_nonface_prob == 0.0 or random.random() > drop_nonface_prob:
                     yield crop, face_factor
                     nb_crops_loaded += 1
 
