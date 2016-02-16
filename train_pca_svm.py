@@ -23,7 +23,7 @@ MODEL_IMAGE_HEIGHT = 512
 MODEL_IMAGE_WIDTH = 512
 CROP_HEIGHT = 64
 CROP_WIDTH = 64
-NB_CROPS = 50000
+NB_CROPS = 15000
 NB_VALIDATION = 2048
 NB_AUGMENTATIONS = 0
 NB_CROPS_PER_IMAGE = 10 # max
@@ -60,7 +60,7 @@ def main():
 
     print("Training...")
     # class_weight="balanced" for sklearn 0.18+
-    svc = SVC(C=1000000, class_weight="auto")
+    svc = SVC(C=1000000, class_weight="auto", cache_size=8000)
     svc.fit(X_train, y_train)
     print("Found %d support vectors" % (len(svc.support_vectors_)))
 
@@ -89,7 +89,8 @@ def load_crops(dataset, nb_crops_max, nb_augmentations):
                                      nb_crops_per_image=NB_CROPS_PER_IMAGE,
                                      model_image_height=MODEL_IMAGE_HEIGHT,
                                      model_image_width=MODEL_IMAGE_WIDTH,
-                                     crop_height=CROP_HEIGHT, crop_width=CROP_WIDTH)
+                                     crop_height=CROP_HEIGHT, crop_width=CROP_WIDTH,
+                                     drop_nonface_prob=0.5)
 
     for i, (crop, face_factor) in enumerate(examples):
         if i % 100 == 0:
