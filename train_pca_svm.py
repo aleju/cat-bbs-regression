@@ -12,7 +12,7 @@ import numpy as np
 import argparse
 import random
 import os
-from sklearn.svm import SVC
+from sklearn.svm import SVC, SVR
 from sklearn.decomposition import PCA
 from train_hog_svm import get_crops_with_labels
 
@@ -21,14 +21,14 @@ random.seed(42)
 
 MODEL_IMAGE_HEIGHT = 512
 MODEL_IMAGE_WIDTH = 512
-CROP_HEIGHT = 64
-CROP_WIDTH = 64
+CROP_HEIGHT = 32
+CROP_WIDTH = 32
 NB_CROPS = 15000
 NB_VALIDATION = 2048
 NB_AUGMENTATIONS = 0
 NB_CROPS_PER_IMAGE = 10 # max
 CAT_FRACTION_THRESHOLD = 0.8
-NB_COMPONENTS = 256 # pca components
+NB_COMPONENTS = 128 # pca components
 
 def main():
     """Load images, train classifier, score classifier."""
@@ -44,8 +44,8 @@ def main():
     # load images and labels
     print("Loading examples...")
     X, y = load_xy(dataset, NB_CROPS, NB_AUGMENTATIONS, NB_COMPONENTS)
-    y[y >= CAT_FRACTION_THRESHOLD] = 1
-    y[y < CAT_FRACTION_THRESHOLD] = 0
+    #y[y >= CAT_FRACTION_THRESHOLD] = 1
+    #y[y < CAT_FRACTION_THRESHOLD] = 0
     assert X.dtype == np.float32
     print("X min:", np.min(X))
     print("X max:", np.max(X))
@@ -60,7 +60,8 @@ def main():
 
     print("Training...")
     # class_weight="balanced" for sklearn 0.18+
-    svc = SVC(C=1000000, class_weight="auto", cache_size=8000)
+    #svc = SVC(C=1000000, class_weight="auto", cache_size=8000)
+    svc = SVR(C=1000000, cache_size=4000)
     svc.fit(X_train, y_train)
     print("Found %d support vectors" % (len(svc.support_vectors_)))
 
