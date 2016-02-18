@@ -21,13 +21,13 @@ random.seed(42)
 
 MODEL_IMAGE_HEIGHT = 512
 MODEL_IMAGE_WIDTH = 512
-CROP_HEIGHT = 32
-CROP_WIDTH = 32
+CROP_HEIGHT = 64
+CROP_WIDTH = 64
 NB_CROPS = 15000
 NB_VALIDATION = 2048
 NB_AUGMENTATIONS = 0
 NB_CROPS_PER_IMAGE = 10 # max
-CAT_FRACTION_THRESHOLD = 0.8
+CAT_FRACTION_THRESHOLD = 0.5
 NB_COMPONENTS = 128 # pca components
 
 def main():
@@ -60,8 +60,8 @@ def main():
 
     print("Training...")
     # class_weight="balanced" for sklearn 0.18+
-    #svc = SVC(C=1000000, class_weight="auto", cache_size=8000)
-    svc = SVR(C=1000000, cache_size=4000)
+    svc = SVC(C=1000000, class_weight="auto", cache_size=8000)
+    #svc = SVR(C=1000000, cache_size=4000)
     svc.fit(X_train, y_train)
     print("Found %d support vectors" % (len(svc.support_vectors_)))
 
