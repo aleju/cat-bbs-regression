@@ -65,7 +65,7 @@ def main():
     checkpoint_cb = ModelCheckpoint(SAVE_WEIGHTS_CHECKPOINT_FILEPATH, verbose=1, \
                                     save_best_only=True)
     model.fit(X_train, y_train, batch_size=BATCH_SIZE, nb_epoch=EPOCHS, validation_split=0.0,
-              validation_data=(X_val, y_val), show_accuracy=False,
+              validation_data=(X_val, y_val),
               callbacks=[checkpoint_cb])
 
     # save weights
@@ -100,6 +100,8 @@ def load_xy(dataset, nb_load, nb_augmentations):
     nb_images = nb_load + nb_load * nb_augmentations
     X = np.zeros((nb_images, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, 3), dtype=np.float32)
     y = np.zeros((nb_images, 4), dtype=np.float32)
+    #X = []
+    #y = []
 
     for img_idx, image in enumerate(dataset.get_images()):
         if img_idx % 100 == 0:
@@ -123,7 +125,11 @@ def load_xy(dataset, nb_load, nb_augmentations):
 
             if i >= nb_images:
                 break
+        if i >= nb_images:
+            break
 
+    #X = np.array(X, dtype=np.float32)
+    #y = np.array(y, dtype=np.float32)
     X = np.rollaxis(X, 3, 1)
 
     return X, y

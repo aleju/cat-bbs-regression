@@ -8,7 +8,7 @@ If an image contains multiple cats, only one face will be extracted.
 
 Usage:
     python train.py
-    python apply_locator.py
+    python apply_convnet.py
 """
 from __future__ import division, print_function
 from dataset import Dataset
@@ -28,7 +28,6 @@ np.random.seed(42)
 random.seed(42)
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
-WRITE_TO_DIR = os.path.join(CURRENT_DIR, "apply_locator_output")
 OUT_SCALE = 64 # scale (height, width) of each saved image
 
 def main():
@@ -36,7 +35,7 @@ def main():
     Main function.
     Does the following step by step:
     * Load images (from which to extract cat faces) from SOURCE_DIR
-    * Initialize model (as trained via train_cat_face_locator.py)
+    * Initialize model (as trained via train_convnet.py)
     * Loads and prepares images for the model.
     * Uses trained model to predict locations of cat faces.
     * Projects face coordinates onto original images
@@ -45,15 +44,15 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Apply a trained cat face locator " \
                                                   "model to images.")
-    parser.add_argument("--dataset", required=True, help="Path to the images directory.")
+    parser.add_argument("--images", required=True, help="Directory containing images to analyze.")
     parser.add_argument("--weights", required=False, default=SAVE_WEIGHTS_CHECKPOINT_FILEPATH,
                         help="Filepath to the weights of the model.")
-    parser.add_argument("--output", required=False, default="apply_model_output",
+    parser.add_argument("--output", required=False, default=os.path.join(CURRENT_DIR, "predictions"),
                         help="Filepath to the directory in which to save the output.")
     args = parser.parse_args()
 
     # load images
-    filepaths = get_image_filepaths([args.dataset])
+    filepaths = get_image_filepaths([args.images])
     filenames = [os.path.basename(fp) for fp in filepaths] # will be used during saving
     nb_images = len(filepaths)
     X = np.zeros((nb_images, MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, 3), dtype=np.float32)
@@ -64,7 +63,8 @@ def main():
     X = np.rollaxis(X, 3, 1)
 
     # assure that dataset is not empty
-    assert X.shape[0] > 0, X.shape
+    print("Found %d images..." % (X.shape[0],))
+    assert X.shape[0] > 0, "The dataset appears to be empty (shape of X: %s)." % (X.shape,)
 
     # create model
     model = create_model(MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, "mse", Adam())
@@ -77,7 +77,7 @@ def main():
     print("Saving images...")
     for idx, (y, x, half_height, half_width) in enumerate(preds):
         img = draw_predicted_rectangle(X[idx], y, x, half_height, half_width)
-        filepath = os.path.join(WRITE_TO_DIR, filenames[idx])
+        filepath = os.path.join(args.output, filenames[idx])
         misc.imsave(filepath, img)
 
 def get_image_filepaths(dirs):

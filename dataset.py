@@ -200,7 +200,7 @@ class ImageWithKeypoints(object):
         matrix = matrix.inverse
 
         # apply transformations
-        new_image = tf.warp(self.image_arr, matrix, mode="nearest")
+        new_image = tf.warp(self.image_arr, matrix, mode="constant")
         new_image = np.array(new_image * 255, dtype=np.uint8)
         self.image_arr = new_image
 
@@ -333,7 +333,7 @@ class ImageWithKeypoints(object):
             # clip to 0-255
             img.image_arr = np.clip(img.image_arr, 0, 255).astype(np.uint8)
 
-            arr = tf.warp(img.image_arr, matrix, mode="nearest") # projects to float 0-1
+            arr = tf.warp(img.image_arr, matrix, mode="constant") # projects to float 0-1
             img.image_arr = np.array(arr * 255, dtype=np.uint8)
             img.keypoints.warp(img, matrix)
             result.append(img)
