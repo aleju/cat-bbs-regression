@@ -15,7 +15,6 @@ The model consists of 7 convolutional layers and 2 fully connected layers (inclu
 # Usage
 
 * Download the [10k cats dataset](https://web.archive.org/web/20150520175645/http://137.189.35.203/WebUI/CatDatabase/catData.html) and extract it, e.g. into directory `/foo/bar/10k-cats`. That directory should contain the subdirectories `CAT_00`, `CAT_01`, etc.
-  * Dataset is available at 
 * Train the model using `train_convnet.py --dataset="/foo/bar/10k-cats"`.
 * Apply the model using `train_convnet.py --dataset="/foo/bar/directory-with-cat-images"`.
 
