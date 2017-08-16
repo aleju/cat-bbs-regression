@@ -19,9 +19,9 @@ import argparse
 import random
 from scipy import ndimage
 from scipy import misc
-from train import MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, BATCH_SIZE, \
-                  SAVE_WEIGHTS_CHECKPOINT_FILEPATH, create_model, \
-                  draw_predicted_rectangle
+from train_convnet import MODEL_IMAGE_HEIGHT, MODEL_IMAGE_WIDTH, \
+                          BATCH_SIZE, SAVE_WEIGHTS_CHECKPOINT_FILEPATH, \
+                          create_model, draw_predicted_rectangle
 from keras.optimizers import Adam
 
 np.random.seed(42)
